@@ -21,9 +21,9 @@ class Transformer:
     
     def transform(self, data):
         """Transforms the data based on the provided transformation steps."""
-        return self.process_filters(data.get("filters", []), data.get("sorts", []), data.get("aggs", {}), data.get("size", 20))
+        return self.process_data(data.get("filters", []), data.get("sorts", []), data.get("aggs", {}), data.get("size", 20))
 
-    def process_filters(self, filters, sorts, aggs, size):
+    def process_data(self, filters, sorts, aggs, size):
         """Adds a filter to the transformation steps."""
         filters_list = []
         for filter_data in filters:
