@@ -332,7 +332,7 @@ class MatchPhraseFilter:
         return cls(data["field"], data["query"], data.get("analyzer"), data.get("boost"), data.get("slop"))
 
 class QueryStringFilter:
-    def __init__(self, query, default_field=None, analyzer=None, boost=None, default_operator=None, allow_leading_wildcard=None, lowercase_expanded_terms=None, enable_position_increments=None, fuzziness=None, fuzzy_max_expansions=None, fuzzy_prefix_length=None, lenient=None, max_determinized_states=None, minimum_should_match=None, phrase_slop=None, quote_analyzer=None, rewrite=None, tie_breaker=None):
+    def __init__(self, query, default_field=None, analyzer=None, boost=None, default_operator=None, allow_leading_wildcard=None, lowercase_expanded_terms=None, enable_position_increments=None, fuzziness=None, fuzzy_max_expansions=None, fuzzy_prefix_length=None, lenient=None, max_determinized_states=None, minimum_should_match=None, phrase_slop=None, quote_analyzer=None, rewrite=None, tie_breaker=None, fields=None): # Added fields parameter
         self.query = query
         self.default_field = default_field
         self.analyzer = analyzer
@@ -351,6 +351,7 @@ class QueryStringFilter:
         self.quote_analyzer = quote_analyzer
         self.rewrite = rewrite
         self.tie_breaker = tie_breaker
+        self.fields = fields # Added fields attribute
 
     def to_elasticsearch(self):
         query_string_query = {"query_string": {"query": self.query}}
@@ -388,67 +389,61 @@ class QueryStringFilter:
             query_string_query["query_string"]["rewrite"] = self.rewrite
         if self.tie_breaker:
             query_string_query["query_string"]["tie_breaker"] = self.tie_breaker
+        if self.fields: # Added condition for fields
+            query_string_query["query_string"]["fields"] = self.fields
         return query_string_query
 
     def to_json(self):
-        json_data = {"type": "query_string", "query": self.query}
-        if self.default_field:
-            json_data["default_field"] = self.default_field
-        if self.analyzer:
-            json_data["analyzer"] = self.analyzer
-        if self.boost:
-            json_data["boost"] = self.boost
-        if self.default_operator:
-            json_data["default_operator"] = self.default_operator
-        if self.allow_leading_wildcard:
-            json_data["allow_leading_wildcard"] = self.allow_leading_wildcard
-        if self.lowercase_expanded_terms:
-            json_data["lowercase_expanded_terms"] = self.lowercase_expanded_terms
-        if self.enable_position_increments:
-            json_data["enable_position_increments"] = self.enable_position_increments
-        if self.fuzziness:
-            json_data["fuzziness"] = self.fuzziness
-        if self.fuzzy_max_expansions:
-            json_data["fuzzy_max_expansions"] = self.fuzzy_max_expansions
-        if self.fuzzy_prefix_length:
-            json_data["fuzzy_prefix_length"] = self.fuzzy_prefix_length
-        if self.lenient:
-            json_data["lenient"] = self.lenient
-        if self.max_determinized_states:
-            json_data["max_determinized_states"] = self.max_determinized_states
-        if self.minimum_should_match:
-            json_data["minimum_should_match"] = self.minimum_should_match
-        if self.phrase_slop:
-            json_data["phrase_slop"] = self.phrase_slop
-        if self.quote_analyzer:
-            json_data["quote_analyzer"] = self.quote_analyzer
-        if self.rewrite:
-            json_data["rewrite"] = self.rewrite
-        if self.tie_breaker:
-            json_data["tie_breaker"] = self.tie_breaker
-        return json_data
+        """Converts the QueryStringFilter object to a JSON-serializable dictionary."""
+        json_data = {
+            "type": "query_string",  # Added the "type" field
+            "query": self.query,
+            "default_field": self.default_field,
+            "analyzer": self.analyzer,
+            "boost": self.boost,
+            "default_operator": self.default_operator,
+            "allow_leading_wildcard": self.allow_leading_wildcard,
+            "lowercase_expanded_terms": self.lowercase_expanded_terms,
+            "enable_position_increments": self.enable_position_increments,
+            "fuzziness": self.fuzziness,
+            "fuzzy_max_expansions": self.fuzzy_max_expansions,
+            "fuzzy_prefix_length": self.fuzzy_prefix_length,
+            "lenient": self.lenient,
+            "max_determinized_states": self.max_determinized_states,
+            "minimum_should_match": self.minimum_should_match,
+            "phrase_slop": self.phrase_slop,
+            "quote_analyzer": self.quote_analyzer,
+            "rewrite": self.rewrite,
+            "tie_breaker": self.tie_breaker,
+            "fields": self.fields
+        }
+        # Remove None values for cleaner JSON
+        cleaned_data = {k: v for k, v in json_data.items() if v is not None}
+        return cleaned_data
 
     @classmethod
-    def from_json(cls, data):
+    def from_json(cls, json_data):
+        """Creates a QueryStringFilter object from a JSON-serializable dictionary."""
         return cls(
-            data["query"],
-            data.get("default_field"),
-            data.get("analyzer"),
-            data.get("boost"),
-            data.get("default_operator"),
-            data.get("allow_leading_wildcard"),
-            data.get("lowercase_expanded_terms"),
-            data.get("enable_position_increments"),
-            data.get("fuzziness"),
-            data.get("fuzzy_max_expansions"),
-            data.get("fuzzy_prefix_length"),
-            data.get("lenient"),
-            data.get("max_determinized_states"),
-            data.get("minimum_should_match"),
-            data.get("phrase_slop"),
-            data.get("quote_analyzer"),
-            data.get("rewrite"),
-            data.get("tie_breaker"),
+            json_data.get("query"),
+            json_data.get("default_field"),
+            json_data.get("analyzer"),
+            json_data.get("boost"),
+            json_data.get("default_operator"),
+            json_data.get("allow_leading_wildcard"),
+            json_data.get("lowercase_expanded_terms"),
+            json_data.get("enable_position_increments"),
+            json_data.get("fuzziness"),
+            json_data.get("fuzzy_max_expansions"),
+            json_data.get("fuzzy_prefix_length"),
+            json_data.get("lenient"),
+            json_data.get("max_determinized_states"),
+            json_data.get("minimum_should_match"),
+            json_data.get("phrase_slop"),
+            json_data.get("quote_analyzer"),
+            json_data.get("rewrite"),
+            json_data.get("tie_breaker"),
+            json_data.get("fields")
         )
 
 def create_filter_object(filter_data):
@@ -494,12 +489,29 @@ def create_filter_object(filter_data):
                         filter_objects.append(MatchPhraseFilter(field, match_phrase_params.pop("query"), match_phrase_params.get("analyzer"), match_phrase_params.get("boost"), match_phrase_params.get("slop")))  # Added slop
                     else:
                         filter_objects.append(MatchPhraseFilter(field, match_phrase_params))  # simple match_phrase
-                elif "query_string" in conditions:  # QueryString query - INTEGRATED
+                elif "query_string" in conditions:  # QueryString query
                     query_string_params = conditions.pop("query_string")
-                    if isinstance(query_string_params, dict):
-                        filter_objects.append(QueryStringFilter(query_string_params.pop("query"), query_string_params.get("default_field"), query_string_params.get("analyzer"), query_string_params.get("boost"), query_string_params.get("default_operator"), query_string_params.get("allow_leading_wildcard"), query_string_params.get("lowercase_expanded_terms"), query_string_params.get("enable_position_increments"), query_string_params.get("fuzziness"), query_string_params.get("fuzzy_max_expansions"), query_string_params.get("fuzzy_prefix_length"), query_string_params.get("lenient"), query_string_params.get("max_determinized_states"), query_string_params.get("minimum_should_match"), query_string_params.get("phrase_slop"), query_string_params.get("quote_analyzer"), query_string_params.get("rewrite"), query_string_params.get("tie_breaker")))
-                    else:
-                        filter_objects.append(QueryStringFilter(query_string_params, query_string_params.get("default_field")))  # simple query_string
+
+                    if isinstance(query_string_params, dict) and "query" in query_string_params: # New format with "query" key
+                        query = query_string_params.pop("query")
+                        fields = query_string_params.pop("fields", None) # Extract fields and remove it from the dict
+                        default_field = query_string_params.pop("default_field", None) # Extract default_field and remove it from the dict
+
+                        allowed_params = ["analyzer", "boost", "default_operator", "allow_leading_wildcard", "lowercase_expanded_terms", "enable_position_increments", "fuzziness", "fuzzy_max_expansions", "fuzzy_prefix_length", "lenient", "max_determinized_states", "minimum_should_match", "phrase_slop", "quote_analyzer", "rewrite", "tie_breaker"]
+                        cleaned_params = {k: v for k, v in query_string_params.items() if k in allowed_params}
+
+                        filter_objects.append(QueryStringFilter(query, default_field, fields=fields, **cleaned_params)) # Pass fields
+
+                    elif isinstance(query_string_params, dict): # Old format with parameters directly inside
+                        query = query_string_params.pop("query")
+                        default_field = query_string_params.pop("default_field", None) # Extract default_field and remove it from the dict
+
+                        allowed_params = ["analyzer", "boost", "default_operator", "allow_leading_wildcard", "lowercase_expanded_terms", "enable_position_increments", "fuzziness", "fuzzy_max_expansions", "fuzzy_prefix_length", "lenient", "max_determinized_states", "minimum_should_match", "phrase_slop", "quote_analyzer", "rewrite", "tie_breaker", "fields"]
+                        cleaned_params = {k: v for k, v in query_string_params.items() if k in allowed_params}
+                        filter_objects.append(QueryStringFilter(query, default_field, **cleaned_params))
+
+                    else:  # Simple query string (string only)
+                        filter_objects.append(QueryStringFilter(query_string_params)) # Only query
                 else:  # Range, Term, Terms, Wildcard queries
                     for operator, value in conditions.items():
                         if operator in ["gt", "lt", "gte", "lte"]:

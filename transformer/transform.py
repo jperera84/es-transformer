@@ -2,14 +2,6 @@ from transformer import filter
 from transformer import sort
 from transformer import aggregation
 
-"""
-Example of the data sent for tranformation:
-{
-    "source": "my_index",
-    "filters": {"field1": {"gt": 10}}
-}
-"""
-
 class Transformer:
     
     def __init__(self, index):
