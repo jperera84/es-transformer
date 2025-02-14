@@ -172,3 +172,33 @@ class TestTransformer(unittest.TestCase):
         query = transformer.transform({"filters": filters})
         expected_query = {"query": {"bool": {"must": [{"wildcard": {"product_name": "p*one"}}]}}, "size": 20}
         self.assertEqual(query, expected_query)
+    
+    def test_transform_sort_simple(self):
+        transformer = Transformer("my_index")
+        data = {"sorts": [{"field": "product_name"}]}
+        expected_query = {"query": {}, "sort": [{"product_name": {"order": "asc"}}], "size": 20} # Assuming default size
+        self.assertEqual(transformer.transform(data), expected_query)
+
+    def test_transform_sort_desc(self):
+        transformer = Transformer("my_index")
+        data = {"sorts": [{"field": "price", "order": "desc"}]}
+        expected_query = {"query": {}, "sort": [{"price": {"order": "desc"}}], "size": 20}
+        self.assertEqual(transformer.transform(data), expected_query)
+
+    def test_transform_sort_multiple(self):
+        transformer = Transformer("my_index")
+        data = {"sorts": [{"field": "category"}, {"field": "price", "order": "desc"}]}
+        expected_query = {"query": {}, "sort": [{"category": {"order": "asc"}}, {"price": {"order": "desc"}}], "size": 20}
+        self.assertEqual(transformer.transform(data), expected_query)
+
+    def test_transform_sort_script(self):
+        transformer = Transformer("my_index")
+        data = {"sorts": [{"field": "my_field", "script": "doc['my_field'].value * 2", "lang": "painless", "type": "number", "order": "desc"}]}
+        expected_query = {"query": {}, "sort": [{"_script": {"script": {"source": "doc['my_field'].value * 2", "lang": "painless"}, "type": "number", "order": "desc"}}], "size": 20}
+        self.assertEqual(transformer.transform(data), expected_query)
+
+    def test_transform_sort_nested(self):
+        transformer = Transformer("my_index")
+        data = {"sorts": [{"field": "nested.field", "nested_path": "nested"}]}
+        expected_query = {"query": {}, "sort": [{"nested.field": {"order": "asc"}, "nested_path": "nested"}], "size": 20}
+        self.assertEqual(transformer.transform(data), expected_query)

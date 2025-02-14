@@ -21,7 +21,7 @@ class BaseAggregation:
         return agg_clause
 
 class TermsAggregation(BaseAggregation):
-    def __init__(self, field, name=None, size=10, order=None, min_doc_count=1, other_bucket=False, include=None, missing=None, nested_path=None, nested_filter=None, aggs=None): # Add aggs parameter
+    def __init__(self, field, name=None, size=10, order=None, min_doc_count=None, other_bucket=False, include=None, missing=None, nested_path=None, nested_filter=None, aggs=None): # Add aggs parameter
         super().__init__(field, name, nested_path, nested_filter, aggs)  # Pass aggs to super()
         self.size = size
         self.order = order
