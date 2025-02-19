@@ -89,15 +89,48 @@ class RangeAggregation(BaseAggregation):
     def __init__(self, field, name=None, ranges=None, nested_path=None, nested_filter=None, aggs=None):
         super().__init__(field, name, nested_path, nested_filter, aggs)
         self.ranges = ranges or []
+        self._validate_ranges()
+
+    def _validate_ranges(self):
+        for r in self.ranges:
+            if "to" in r and "from" in r and r["to"] <= r["from"]:
+                raise ValueError("Invalid range: 'to' must be greater than 'from'")
+            keys = list(r.keys())
+            if keys.count("to") > 1 or keys.count("from") > 1 or keys.count("key") > 1:
+                raise ValueError("Invalid range: Duplicate 'to', 'from', or 'key' keys are not allowed in a single range definition.")
 
     def to_elasticsearch(self):
         range_agg = {"range": {self.field: {}}}
         for r in self.ranges:
-            range_agg["range"][self.field].update(r)
-        range_agg = self._add_nested_clause(range_agg)
-        if self.aggs:  # Add nested aggregations if present
-            range_agg["aggs"] = build_aggregation_query_class(self.aggs) # Corrected
-        return {self.name: range_agg} if self.name else range_agg
+            ordered_r = {}
+            if "from" in r:
+                ordered_r["from"] = r["from"]
+            if "to" in r:
+                ordered_r["to"] = r["to"]
+            for k,v in r.items(): # Add the rest of the keys
+                if k not in ["from", "to"]:
+                    ordered_r[k] = v
+            range_agg["range"][self.field].update(ordered_r)
+
+        if self.aggs:
+            wrapped_aggs = {}
+            for name, sub_agg in self.aggs.items():
+                elasticsearch_agg = sub_agg.to_elasticsearch() if hasattr(sub_agg, "to_elasticsearch") else sub_agg
+                if elasticsearch_agg is not None:  # Check for None result
+                    wrapped_aggs[name] = elasticsearch_agg
+            range_agg["aggs"] = wrapped_aggs
+
+        if self.nested_path:
+            nested_query = {"nested": {"path": self.nested_path}}
+            if self.nested_filter:
+                nested_query["nested"]["filter"] = self.nested_filter
+
+            # Correct: Wrap the NAMED aggregation, which contains the range and nested aggs
+            wrapped_range_agg = {self.name: range_agg} if self.name else range_agg # Correct name wrapping
+            nested_query["nested"]["aggs"] = wrapped_range_agg
+            return nested_query
+
+        return {self.name: range_agg} if self.name else range_agg # Correct name wrapping
 
     def to_json(self):
         return {"type": "range_aggregation", "field": self.field, "name": self.name, "ranges": self.ranges,
