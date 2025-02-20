@@ -26,10 +26,10 @@ def home():
     query6 = transformer.transform(
         generate_wildcard_filter_object()
     )
-    """query7 = transformer.transform(
+    query7 = transformer.transform(
         generate_bool_filter_object()
-    ) """
-    return prettify_query([query1, query2, query3, query4, query5, query6])
+    )
+    return prettify_query([query1, query2, query3, query4, query5, query6, query7])
 
 def prettify_query(query):
     """Prettifies a nested dictionary (like an Elasticsearch query) as JSON."""
