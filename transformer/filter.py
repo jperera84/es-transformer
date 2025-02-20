@@ -22,81 +22,31 @@ class IdsFilter:
         return cls(data["values"])
 
 class MatchFilter:
-    def __init__(self, field, query, analyzer=None, boost=None, fuzziness=None, operator=None, minimum_should_match=None, zero_terms_query=None):
+    def __init__(self, field, query, boost=None):
         if not query:
             raise ValueError("MatchFilter requires a non-empty query.")
-        if operator and operator not in VALID_OPERATORS:
-            raise ValueError(f"Invalid operator '{operator}'. Allowed: {VALID_OPERATORS}")
-        if zero_terms_query and zero_terms_query not in {"none", "all"}:
-            raise ValueError("zero_terms_query must be either 'none' or 'all'.")
-
         self.field = field
         self.query = query
-        self.analyzer = analyzer
         self.boost = boost
-        self.fuzziness = fuzziness
-        self.operator = operator
-        self.minimum_should_match = minimum_should_match
-        self.zero_terms_query = zero_terms_query
 
     def to_elasticsearch(self):
-        match_query = {
-            "match": {
-                self.field: {
-                    "query": self.query
-                }
-            }
-        }
-        if self.analyzer:
-            match_query["match"][self.field]["analyzer"] = self.analyzer
-        if self.boost:
+        match_query = {"match": {self.field: {"query": self.query}}}
+        if self.boost is not None:
             match_query["match"][self.field]["boost"] = self.boost
-        if self.fuzziness:
-            match_query["match"][self.field]["fuzziness"] = self.fuzziness
-        if self.operator:
-            match_query["match"][self.field]["operator"] = self.operator
-        if self.minimum_should_match:
-            match_query["match"][self.field]["minimum_should_match"] = self.minimum_should_match
-        if self.zero_terms_query:
-            match_query["match"][self.field]["zero_terms_query"] = self.zero_terms_query
-
-        logger.debug(f"Generated match query: {match_query}")
         return match_query
 
     def to_json(self):
-        json_data = {
-            "type": "match",
-            "field": self.field,
-            "query": self.query
-        }
-        if self.analyzer:
-            json_data["analyzer"] = self.analyzer
-        if self.boost:
+        json_data = {"type": "match", "field": self.field, "query": self.query}
+        if self.boost is not None:
             json_data["boost"] = self.boost
-        if self.fuzziness:
-            json_data["fuzziness"] = self.fuzziness
-        if self.operator:
-            json_data["operator"] = self.operator
-        if self.minimum_should_match:
-            json_data["minimum_should_match"] = self.minimum_should_match
-        if self.zero_terms_query:
-            json_data["zero_terms_query"] = self.zero_terms_query
         return json_data
 
     @classmethod
     def from_json(cls, data):
-        return cls(
-            data["field"],
-            data["query"],
-            data.get("analyzer"),
-            data.get("boost"),
-            data.get("fuzziness"),
-            data.get("operator"),
-            data.get("minimum_should_match"),
-            data.get("zero_terms_query")
-        )
+        return cls(data["field"], data["query"], data.get("boost"))
 
 class RangeFilter:
+
     def __init__(self, field, **conditions):
         self.field = field
         self.conditions = {}
@@ -122,64 +72,26 @@ class RangeFilter:
         return cls(field, **data)  # Pass remaining data as conditions
 
 class TermFilter:
-    def __init__(self, field, value, boost=None, case_insensitive=False):
-        """
-        Initialize a TermFilter.
-
-        :param field: The field to search.
-        :param value: The exact value to match.
-        :param boost: (Optional) Boost value to increase or decrease relevance.
-        :param case_insensitive: (Optional) Perform case-insensitive matching. Defaults to False.
-        """
+    def __init__(self, field, value, boost=None):
         self.field = field
         self.value = value
         self.boost = boost
-        self.case_insensitive = case_insensitive
 
     def to_elasticsearch(self):
-        """
-        Convert the TermFilter to an Elasticsearch-compatible query.
-
-        :return: A dictionary representing the term query.
-        """
-        term_body = {"value": self.value}
+        term_query = {"term": {self.field: self.value}}
         if self.boost is not None:
-            term_body["boost"] = self.boost
-        if self.case_insensitive:
-            term_body["case_insensitive"] = self.case_insensitive
-        return {"term": {self.field: term_body}}
+            term_query["term"][self.field] = {"value": self.value, "boost": self.boost}
+        return term_query
 
     def to_json(self):
-        """
-        Convert the TermFilter to a JSON-serializable dictionary.
-
-        :return: A dictionary representation of the TermFilter.
-        """
-        json_data = {
-            "type": "term",
-            "field": self.field,
-            "value": self.value
-        }
+        json_data = {"type": "term", "field": self.field, "value": self.value}
         if self.boost is not None:
             json_data["boost"] = self.boost
-        if self.case_insensitive:
-            json_data["case_insensitive"] = self.case_insensitive
         return json_data
 
     @classmethod
     def from_json(cls, data):
-        """
-        Create a TermFilter instance from a JSON dictionary.
-
-        :param data: A dictionary containing the TermFilter data.
-        :return: An instance of TermFilter.
-        """
-        return cls(
-            data["field"],
-            data["value"],
-            data.get("boost"),
-            data.get("case_insensitive", False)
-        )
+        return cls(data["field"], data["value"], data.get("boost"))
 
 class TermsFilter:
     def __init__(self, field, terms, boost=None):
@@ -238,37 +150,20 @@ class TermsFilter:
         )
 
 class WildcardFilter:
-    def __init__(self, field, value, boost=None, case_insensitive=False, rewrite=None):
-        """
-        Initialize a WildcardFilter.
-
-        :param field: The field to search.
-        :param value: The wildcard pattern to match.
-        :param boost: (Optional) Boost value to increase or decrease relevance.
-        :param case_insensitive: (Optional) Perform case-insensitive matching. Defaults to False.
-        :param rewrite: (Optional) Method used to rewrite the query.
-        """
+    def __init__(self, field, value, boost=None):
         self.field = field
         self.value = value
-        self.boost = boost
-        self.case_insensitive = case_insensitive
-        self.rewrite = rewrite
+        self.boost = boost  # Boost is stored but applied inside the wildcard query
 
     def to_elasticsearch(self):
-        """
-        Convert the WildcardFilter to an Elasticsearch-compatible query.
+        wildcard_query = {"wildcard": {self.field: {"value": self.value}}}
 
-        :return: A dictionary representing the wildcard query.
-        """
-        wildcard_body = {"value": self.value}
+        # ✅ FIX: Apply boosting INSIDE the wildcard query, NOT in `bool`
         if self.boost is not None:
-            wildcard_body["boost"] = self.boost
-        if self.case_insensitive:
-            wildcard_body["case_insensitive"] = self.case_insensitive
-        if self.rewrite:
-            wildcard_body["rewrite"] = self.rewrite
-        return {"wildcard": {self.field: wildcard_body}}
+            wildcard_query["wildcard"][self.field]["boost"] = self.boost
 
+        return wildcard_query
+    
     def to_json(self):
         """
         Convert the WildcardFilter to a JSON-serializable dictionary.
@@ -305,28 +200,13 @@ class WildcardFilter:
         )
 
 class BoolFilter:
-    def __init__(self, must=None, must_not=None, should=None, filter=None, minimum_should_match=None):
-        """
-        Initialize a BoolFilter.
-
-        :param must: (Optional) List of queries that must match.
-        :param must_not: (Optional) List of queries that must not match.
-        :param should: (Optional) List of queries that should match.
-        :param filter: (Optional) List of queries to filter results.
-        :param minimum_should_match: (Optional) Minimum number of should clauses to match.
-        """
+    def __init__(self, must=None, must_not=None, should=None, minimum_should_match=None):
         self.must = must or []
         self.must_not = must_not or []
         self.should = should or []
-        self.filter = filter or []
         self.minimum_should_match = minimum_should_match
 
     def to_elasticsearch(self):
-        """
-        Convert the BoolFilter to an Elasticsearch-compatible query.
-
-        :return: A dictionary representing the bool query.
-        """
         bool_query = {"bool": {}}
         if self.must:
             bool_query["bool"]["must"] = [q.to_elasticsearch() for q in self.must]
@@ -334,18 +214,11 @@ class BoolFilter:
             bool_query["bool"]["must_not"] = [q.to_elasticsearch() for q in self.must_not]
         if self.should:
             bool_query["bool"]["should"] = [q.to_elasticsearch() for q in self.should]
-        if self.filter:
-            bool_query["bool"]["filter"] = [q.to_elasticsearch() for q in self.filter]
         if self.minimum_should_match is not None:
             bool_query["bool"]["minimum_should_match"] = self.minimum_should_match
         return bool_query
 
     def to_json(self):
-        """
-        Convert the BoolFilter to a JSON-serializable dictionary.
-
-        :return: A dictionary representation of the BoolFilter.
-        """
         json_data = {"type": "bool"}
         if self.must:
             json_data["must"] = [q.to_json() for q in self.must]
@@ -353,66 +226,73 @@ class BoolFilter:
             json_data["must_not"] = [q.to_json() for q in self.must_not]
         if self.should:
             json_data["should"] = [q.to_json() for q in self.should]
-        if self.filter:
-            json_data["filter"] = [q.to_json() for q in self.filter]
         if self.minimum_should_match is not None:
             json_data["minimum_should_match"] = self.minimum_should_match
         return json_data
 
     @classmethod
     def from_json(cls, data):
-        """
-        Create a BoolFilter instance from a JSON dictionary.
-
-        :param data: A dictionary containing the BoolFilter data.
-        :return: An instance of BoolFilter.
-        """
-        must = [globals()[item["type"].capitalize() + "Filter"].from_json(item) for item in data.get("must", [])]
-        must_not = [globals()[item["type"].capitalize() + "Filter"].from_json(item) for item in data.get("must_not", [])]
-        should = [globals()[item["type"].capitalize() + "Filter"].from_json(item) for item in data.get("should", [])]
-        filter = [globals()[item["type"].capitalize() + "Filter"].from_json(item) for item in data.get("filter", [])]
+        must = [create_filter_object(item) for item in data.get("must", [])]
+        must_not = [create_filter_object(item) for item in data.get("must_not", [])]
+        should = [create_filter_object(item) for item in data.get("should", [])]
         minimum_should_match = data.get("minimum_should_match")
-        return cls(must=must, must_not=must_not, should=should, filter=filter, minimum_should_match=minimum_should_match)
+        return cls(must=must, must_not=must_not, should=should, minimum_should_match=minimum_should_match)
 
 def create_filter_object(filter_data):
-    """Infers filter type based on structure and converts it to an Elasticsearch query."""
-    filter_objects = []
-
-    if isinstance(filter_data, list):  # AND condition
-        return [BoolFilter("must", [create_filter_object(fd) for fd in filter_data])]
+    if isinstance(filter_data, list):  # AND condition (must)
+        return BoolFilter(must=[create_filter_object(fd) for fd in filter_data])
 
     elif isinstance(filter_data, dict):
         for field, value in filter_data.items():
-            # Handle dictionary values -> Explicit query type (match, term, range, terms, wildcard)
-            if isinstance(value, dict):
-                if "match" in value:
-                    filter_objects.append(MatchFilter(field, value["match"]))
+            # ✅ Handle `ids` query separately
+            if field == "ids" and isinstance(value, list):
+                return IdsFilter(value)
+
+            elif isinstance(value, list):
+                return TermsFilter(field, value)
+
+            elif isinstance(value, dict):
+                # ✅ Handle wildcard filters separately
+                if "wildcard" in value:
+                    return WildcardFilter(field, value["wildcard"], boost=value.get("boost"))
+
+                # ✅ Fix: Ensure boost applies only to `terms` queries
+                elif "boost" in value and isinstance(value["boost"], (int, float)) and field in value:
+                    return BoolFilter(
+                        should=[TermsFilter(field, value[field])],
+                        minimum_should_match=1
+                    )
+
+                elif "match" in value:
+                    return MatchFilter(field, value["match"])
+
                 elif "term" in value:
-                    filter_objects.append(TermFilter(field, value["term"]))
-                elif "terms" in value:
-                    filter_objects.append(TermsFilter(field, value["terms"], value.get("boost")))
-                elif "wildcard" in value:
-                    filter_objects.append(WildcardFilter(field, value["wildcard"], value.get("boost"), value.get("case_insensitive", False), value.get("rewrite")))
-                elif any(op in value for op in ["gt", "lt", "gte", "lte"]):  # Range query
-                    filter_objects.append(RangeFilter(field, **value))
+                    return TermFilter(field, value["term"])
+
+                # ✅ Handle range filters properly
+                range_operators = {k: v for k, v in value.items() if k in {"gt", "lt", "gte", "lte"}}
+                if range_operators:
+                    return RangeFilter(field, **range_operators)
+
+                elif "minimum_should_match" in value:
+                    return BoolFilter(
+                        should=[create_filter_object({field: v}) for v in value.keys() if v != "minimum_should_match"],
+                        minimum_should_match=value["minimum_should_match"]
+                    )
+
                 else:
                     raise ValueError(f"Unknown filter structure for field '{field}': {value}")
 
-            # Handle list values -> Assume `terms` query
-            elif isinstance(value, list):
-                filter_objects.append(TermsFilter(field, value))
+            else:
+                # ✅ Fix: Ensure match vs term is correctly inferred
+                if isinstance(value, str) and " " in value:
+                    return MatchFilter(field, value)  # Full-text search → match query
+                else:
+                    return TermFilter(field, value)  # Exact keyword match → term query
 
-            # Handle simple values (string, number, boolean) -> `term` query
-            elif isinstance(value, (int, float, bool)):  
-                filter_objects.append(TermFilter(field, value))
+    else:
+        raise TypeError("Filter data must be a list or a dictionary")
 
-            elif isinstance(value, str):  
-                if " " in value:  # If value contains spaces, assume full-text `match`
-                    filter_objects.append(MatchFilter(field, value))
-                else:  # Otherwise, assume exact `term`
-                    filter_objects.append(TermFilter(field, value))
-
-    return filter_objects
 
 def build_filter_query_class(filters_data):
     """Converts a list of filter objects into an Elasticsearch bool query."""
@@ -426,7 +306,10 @@ def build_filter_query_class(filters_data):
         else:
             filters.append(filter_data)  # Wrap single object in a list
 
+    # ✅ If there's only one filter, return it directly (no need for `bool`)
     if len(filters) == 1:
-        return filters[0].to_elasticsearch()  # Return the single filter directly
+        return filters[0].to_elasticsearch()
 
-    return {"bool": {"must": [f.to_elasticsearch() for f in filters]}}  # Wrap in a `bool` query
+    # ✅ Otherwise, wrap multiple filters inside `bool.must`
+    return {"bool": {"must": [f.to_elasticsearch() for f in filters]}}
+

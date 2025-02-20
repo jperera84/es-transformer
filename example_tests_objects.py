@@ -8,19 +8,16 @@ def generate_ids_filter_object():
 def generate_match_filter_object():
     return {
         "filters": [
-            # { "status": "active" }, # term (keyword field)
             { "title": "quick brown fox" }, # match (full-text search)
-            # { "price": 100 }, # term (numeric field, exact match)
-            # { "tags": ["electronics", "sale"] }, # terms (multi-value keyword field)
             { "title": { "match": "quick brown fox" } }, # match (explicit)
-            # { "status": { "term": "active" } } # term (explicit)
         ]
     }
 
 def generate_range_filter_object():
     return {
         "filters": [
-            { "price": { "gt": 10, "lt": 100 } }, # range (numeric field)
+            { "price": { "gt": 10, "lt": 100 } },  # range (numeric field)
+            { "price": { "gt": 1, "lt": 9 } }  # range (numeric field)
         ]
     }
 
@@ -38,13 +35,10 @@ def generate_term_filter_object():
 def generate_terms_filter_object():
     return {
         "filters": [
-            { "tags": ["new", "featured"], "boost": 1.0 },  # ✅ Inferred as `terms`
-            { "tags": ["electronics", "sale"] }, # terms (multi-value keyword field)
-            { "status": "active" },  # ✅ Inferred as `term`
-            { "age": 30 },  # ✅ Inferred as `term`
-            { "role": { "term": "Admin" } },  # ✅ Explicit term query
-            { "title": "quick brown fox" },  # ✅ Inferred as `match`
-            { "price": { "gt": 10, "lt": 100 } }  # ✅ Inferred as `range`
+            { "title": "quick brown fox" },
+            { "tags": ["new", "featured"], "boost": 1.0 },
+            { "tags": ["electronics", "sale"] },
+            { "filename": { "wildcard": "*.log", "boost": 2.0 } }
         ]
     }
 

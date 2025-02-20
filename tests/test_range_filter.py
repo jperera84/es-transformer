@@ -46,7 +46,7 @@ class TestRangeFilter(unittest.TestCase):
         )
 
     def test_from_json(self):
-        json_data = {"field": "price", "gt": 100, "lt": 500}
+        json_data = {"field": "price", "gt": 100, "lt": 500}  # Removed "type"
         range_filter = RangeFilter.from_json(json_data)
         self.assertEqual(range_filter.field, "price")
         self.assertEqual(range_filter.conditions["gt"], 100)
