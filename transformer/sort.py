@@ -1,5 +1,7 @@
 class Sort:
-    def __init__(self, field, order="asc", mode=None, format=None, numeric_type=None, nested_path=None, nested_filter=None, missing=None, unmapped_type=None, script=None, lang="painless", params=None, type=None):
+    def __init__(self, field, order="asc", mode=None, format=None, numeric_type=None,
+                 nested_path=None, nested_filter=None, missing=None, unmapped_type=None,
+                 script=None, lang="painless", params=None, type=None):
         self.field = field
         self.order = order
         self.mode = mode
@@ -12,50 +14,51 @@ class Sort:
         self.script = script
         self.lang = lang
         self.params = params
-        self.type = type  # Optional for script-based sorting
+        self.type = type
 
     def to_elasticsearch(self):
-        # ✅ Special handling for sorting by `_score`
-        if self.field == "_score":
-            return {"_score": {"order": self.order}}
-
-        # ✅ Handling script-based sorting correctly
+        """Converts the Sort object to an Elasticsearch-compatible dictionary."""
+        
+        # ✅ FIX: Handle `_script` sorting
         if self.script:
-            script_sort = {
+            script_obj = {
                 "_script": {
                     "script": {
                         "source": self.script,
                         "lang": self.lang
                     },
-                    "order": self.order
+                    "order": self.order  # ✅ Ensure "order" is included
                 }
             }
             if self.params:
-                script_sort["_script"]["script"]["params"] = self.params
+                script_obj["_script"]["script"]["params"] = self.params
             if self.type:
-                script_sort["_script"]["type"] = self.type  # Only if needed
-            return script_sort
+                script_obj["_script"]["type"] = self.type  # ✅ Ensure "type" is set properly
+            
+            return script_obj
 
-        # ✅ Handling standard field-based sorting
-        sort_clause = {self.field: {"order": self.order}}
+        # ✅ Regular field-based sorting
+        sort_query = {self.field: {"order": self.order}}
 
         if self.mode:
-            sort_clause[self.field]["mode"] = self.mode
+            sort_query[self.field]["mode"] = self.mode
         if self.format:
-            sort_clause[self.field]["format"] = self.format
+            sort_query[self.field]["format"] = self.format
         if self.numeric_type:
-            sort_clause[self.field]["numeric_type"] = self.numeric_type
+            sort_query[self.field]["numeric_type"] = self.numeric_type
         if self.missing:
-            sort_clause[self.field]["missing"] = self.missing
-        if self.nested_path:
-            sort_clause[self.field]["nested_path"] = self.nested_path
-        if self.nested_filter:
-            sort_clause[self.field]["nested_filter"] = self.nested_filter
+            sort_query[self.field]["missing"] = self.missing
         if self.unmapped_type:
-            sort_clause[self.field]["unmapped_type"] = self.unmapped_type
+            sort_query[self.field]["unmapped_type"] = self.unmapped_type
 
-        return sort_clause
+        if self.nested_path:
+            sort_query["nested_path"] = self.nested_path
 
+        if self.nested_filter:
+            sort_query[self.field]["nested_filter"] = self.nested_filter
+
+        return sort_query
+    
     def to_json(self):
         json_data = {
             "type": "sort",

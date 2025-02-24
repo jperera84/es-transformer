@@ -66,3 +66,42 @@ def generate_bool_filter_object():
             ]
         ]
     }
+
+def generate_sort_object():
+    return [
+        # ✅ Basic field sorting (ascending)
+        { "field": "price", "order": "asc" },
+
+        # ✅ Field sorting (descending)
+        { "field": "rating", "order": "desc" },
+
+        # ✅ Sorting with `missing` parameter
+        { "field": "created_at", "order": "asc", "missing": "_last" },
+
+        # ✅ Sorting with `mode`
+        { "field": "popularity", "order": "desc", "mode": "max" },
+
+        # ✅ Sorting with `unmapped_type`
+        { "field": "category", "order": "asc", "unmapped_type": "keyword" },
+
+        # ✅ Nested field sorting
+        { "field": "nested.field", "order": "asc", "nested_path": "nested" },
+
+        # ✅ Script-based sorting
+        {
+            "field": "_script",
+            "order": "desc",
+            "script": "doc['my_field'].value * 2",
+            "type": "number"
+        },
+
+        # ✅ Nested sorting with filter
+        {
+            "field": "reviews.rating",
+            "order": "desc",
+            "nested_path": "reviews",
+            "nested_filter": {
+                "term": { "reviews.verified": True }
+            }
+        }
+    ]
