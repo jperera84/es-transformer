@@ -1,4 +1,4 @@
-class Sort:  # New class for sort definitions
+class Sort:
     def __init__(self, field, order="asc", mode=None, format=None, numeric_type=None, nested_path=None, nested_filter=None, missing=None, unmapped_type=None, script=None, lang="painless", params=None, type=None):
         self.field = field
         self.order = order
@@ -12,38 +12,56 @@ class Sort:  # New class for sort definitions
         self.script = script
         self.lang = lang
         self.params = params
-        self.type = type
+        self.type = type  # Optional for script-based sorting
 
     def to_elasticsearch(self):
-        if self.field == "_score":  # Special case for _score
+        # ✅ Special handling for sorting by `_score`
+        if self.field == "_score":
             return {"_score": {"order": self.order}}
-        elif self.script:  # handle script sort (Corrected)
-            script_clause = {"source": self.script}  # Correct _script structure
-            if self.lang:
-                script_clause["lang"] = self.lang
+
+        # ✅ Handling script-based sorting correctly
+        if self.script:
+            script_sort = {
+                "_script": {
+                    "script": {
+                        "source": self.script,
+                        "lang": self.lang
+                    },
+                    "order": self.order
+                }
+            }
             if self.params:
-                script_clause["params"] = self.params
-            return {"_script": {"script": script_clause, "type": self.type, "order": self.order}}  # Correct _script structure with type and order outside
-        else:
-            sort_clause = {self.field: {"order": self.order}}
-            if self.mode:
-                sort_clause[self.field]["mode"] = self.mode
-            if self.format:
-                sort_clause[self.field]["format"] = self.format
-            if self.numeric_type:
-                sort_clause[self.field]["numeric_type"] = self.numeric_type
-            if self.nested_path:
-                sort_clause["nested_path"] = self.nested_path
-            if self.nested_filter:
-                sort_clause["nested_filter"] = self.nested_filter
-            if self.missing:
-                sort_clause[self.field]["missing"] = self.missing
-            if self.unmapped_type:
-                sort_clause[self.field]["unmapped_type"] = self.unmapped_type
-            return sort_clause if isinstance(self.field, str) else self.field  # Handle sorting by object
+                script_sort["_script"]["script"]["params"] = self.params
+            if self.type:
+                script_sort["_script"]["type"] = self.type  # Only if needed
+            return script_sort
+
+        # ✅ Handling standard field-based sorting
+        sort_clause = {self.field: {"order": self.order}}
+
+        if self.mode:
+            sort_clause[self.field]["mode"] = self.mode
+        if self.format:
+            sort_clause[self.field]["format"] = self.format
+        if self.numeric_type:
+            sort_clause[self.field]["numeric_type"] = self.numeric_type
+        if self.missing:
+            sort_clause[self.field]["missing"] = self.missing
+        if self.nested_path:
+            sort_clause[self.field]["nested_path"] = self.nested_path
+        if self.nested_filter:
+            sort_clause[self.field]["nested_filter"] = self.nested_filter
+        if self.unmapped_type:
+            sort_clause[self.field]["unmapped_type"] = self.unmapped_type
+
+        return sort_clause
 
     def to_json(self):
-        json_data = {"type": "sort", "field": self.field, "order": self.order}
+        json_data = {
+            "type": "sort",
+            "field": self.field,
+            "order": self.order
+        }
         if self.mode:
             json_data["mode"] = self.mode
         if self.format:
@@ -61,27 +79,43 @@ class Sort:  # New class for sort definitions
         if self.script:
             json_data["script"] = self.script
             json_data["lang"] = self.lang
-            json_data["params"] = self.params
-            json_data["type"] = self.type  # Type outside the script object
+            if self.params:
+                json_data["params"] = self.params
+            if self.type:
+                json_data["type"] = self.type
         return json_data
 
     @classmethod
     def from_json(cls, data):
-        return cls(data["field"], data["order"], data.get("mode"), data.get("format"), data.get("numeric_type"), data.get("nested_path"), data.get("nested_filter"), data.get("missing"), data.get("unmapped_type"), data.get("script"), data.get("lang"), data.get("params"), data.get("type"))
+        return cls(
+            field=data["field"],
+            order=data.get("order", "asc"),
+            mode=data.get("mode"),
+            format=data.get("format"),
+            numeric_type=data.get("numeric_type"),
+            nested_path=data.get("nested_path"),
+            nested_filter=data.get("nested_filter"),
+            missing=data.get("missing"),
+            unmapped_type=data.get("unmapped_type"),
+            script=data.get("script"),
+            lang=data.get("lang", "painless"),
+            params=data.get("params"),
+            type=data.get("type")
+        )
 
 def create_sort_object(data):
     return Sort(
-        data["field"], 
-        data.get("order", "asc"), 
-        data.get('mode'), 
-        data.get('format'), 
-        data.get('numeric_type'),
-        data.get('nested_path'),
-        data.get('nested_filter'),
-        data.get('missing'),
-        data.get('unmapped_type'),
-        data.get('script'),
-        data.get('lang'),
-        data.get('params'),
-        data.get('type')
-    )  # default order is "asc" 
+        field=data["field"],
+        order=data.get("order", "asc"),
+        mode=data.get("mode"),
+        format=data.get("format"),
+        numeric_type=data.get("numeric_type"),
+        nested_path=data.get("nested_path"),
+        nested_filter=data.get("nested_filter"),
+        missing=data.get("missing"),
+        unmapped_type=data.get("unmapped_type"),
+        script=data.get("script"),
+        lang=data.get("lang"),
+        params=data.get("params"),
+        type=data.get("type")
+    )
