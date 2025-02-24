@@ -30,10 +30,7 @@ def home():
         generate_bool_filter_object()
     )
     query8 = transformer.transform(
-        data= {
-            "filters": generate_ids_filter_object(),
-            "sorts": generate_sort_object(),
-        }
+        generate_sort_object()
     )
     return prettify_query([query1, query2, query3, query4, query5, query6, query7, query8])
 

@@ -24,9 +24,17 @@ class TestSortClass(unittest.TestCase):
         self.assertEqual(sort_obj.to_elasticsearch(), expected)
 
     def test_sort_to_elasticsearch_nested(self):
-        sort_obj = Sort("nested.field", nested_path="nested")
-        expected = {"nested.field": {"order": "asc"}, "nested_path": "nested"}
+        sort_obj = Sort(field="nested.field", order="asc", nested_path="nested")
+        expected = {
+            "nested.field": {
+                "order": "asc",
+                "nested": {  # ✅ Correct placement of nested path
+                    "path": "nested"
+                }
+            }
+        }
         self.assertEqual(sort_obj.to_elasticsearch(), expected)
+
 
     def test_sort_to_elasticsearch_missing(self):
         sort_obj = Sort("date", missing="_last")

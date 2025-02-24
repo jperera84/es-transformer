@@ -7,19 +7,19 @@ class Sort:
         self.mode = mode
         self.format = format
         self.numeric_type = numeric_type
-        self.nested_path = nested_path
-        self.nested_filter = nested_filter
+        self.nested_path = nested_path  # ✅ Will be handled correctly now
+        self.nested_filter = nested_filter  # ✅ Will be wrapped properly
         self.missing = missing
         self.unmapped_type = unmapped_type
         self.script = script
-        self.lang = lang
+        self.lang = lang if lang else "painless"  # ✅ Ensure lang is not `null`
         self.params = params
         self.type = type
 
     def to_elasticsearch(self):
         """Converts the Sort object to an Elasticsearch-compatible dictionary."""
         
-        # ✅ FIX: Handle `_script` sorting
+        # ✅ FIX: Handle `_script` sorting properly
         if self.script:
             script_obj = {
                 "_script": {
@@ -27,7 +27,7 @@ class Sort:
                         "source": self.script,
                         "lang": self.lang
                     },
-                    "order": self.order  # ✅ Ensure "order" is included
+                    "order": self.order
                 }
             }
             if self.params:
@@ -51,14 +51,14 @@ class Sort:
         if self.unmapped_type:
             sort_query[self.field]["unmapped_type"] = self.unmapped_type
 
-        if self.nested_path:
-            sort_query["nested_path"] = self.nested_path
-
-        if self.nested_filter:
-            sort_query[self.field]["nested_filter"] = self.nested_filter
+        # ✅ FIX: Ensure `nested_path` is placed inside a `nested` object
+        if self.nested_path or self.nested_filter:
+            sort_query[self.field]["nested"] = {"path": self.nested_path}
+            if self.nested_filter:
+                sort_query[self.field]["nested"]["filter"] = self.nested_filter
 
         return sort_query
-    
+
     def to_json(self):
         json_data = {
             "type": "sort",
