@@ -162,3 +162,42 @@ def generate_sum_agg_object():
             "total_price": ["sum"]  # ✅ Simplified format: ["aggregation_type"]
         }
     }
+
+def generate_min_agg_object():
+    return {
+        "aggs": {
+            "price": ["min"]  # ✅ Simplified format: ["aggregation_type"]
+        }
+    }
+
+def generate_max_agg_object():
+    return {
+        "aggs": {
+            "price": ["max"]  # ✅ Simplified format: ["aggregation_type"]
+        }
+    }
+
+def generate_cardinality_agg_object():
+    return {
+        "aggs": {
+            "unique_users": ["cardinality", 3000]  # ✅ ["AggregationType", precision_threshold]
+        }
+    }
+
+def generate_composite_agg_object():
+    return {
+        "aggs": {
+            "composite_example": [
+                "composite",
+                {
+                    "sources": [
+                        {"name": "category_terms", "terms": {"field": "category"}},
+                        {"name": "price_histogram", "histogram": {"field": "price", "interval": 50}}
+                    ],
+                    "size": 20,
+                    "order": {"category_terms": "asc", "price_histogram": "desc"},
+                    "after": {"category": "some_category", "price": 100}
+                }
+            ]
+        }
+    }

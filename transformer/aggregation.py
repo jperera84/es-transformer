@@ -363,37 +363,82 @@ class MinAggregation(BaseAggregation):
         super().__init__(field, name, nested_path, nested_filter, aggs)
 
     def to_elasticsearch(self):
+        """Convert MinAggregation to an Elasticsearch-compatible format."""
         min_agg = {"min": {"field": self.field}}
+        
+        # ✅ Handle nested paths/filters if applicable
         min_agg = self._add_nested_clause(min_agg)
-        if self.aggs:  # Add nested aggregations if present
-            min_agg["aggs"] = build_aggregation_query_class(self.aggs) # Corrected
-        return {self.name: min_agg} if self.name else min_agg
 
+        # ✅ Add sub-aggregations if they exist
+        if self.aggs:
+            min_agg["aggs"] = build_aggregation_query_class(self.aggs)
+
+        # ✅ Ensure correct wrapping of aggregation under field name
+        return {self.name: min_agg} if self.name else {self.field: min_agg}
 
     def to_json(self):
-        return {"type": "min_aggregation", "field": self.field, "nested_path": self.nested_path, "nested_filter": self.nested_filter}
+        """Convert MinAggregation to JSON format."""
+        json_data = {
+            "type": "min_aggregation",
+            "field": self.field,
+            "name": self.name,
+            "nested_path": self.nested_path,
+            "nested_filter": self.nested_filter
+        }
+
+        # ✅ Remove None values
+        return {k: v for k, v in json_data.items() if v is not None}
 
     @classmethod
     def from_json(cls, data):
-        return cls(data["field"], data.get("nested_path"), data.get("nested_filter"))
+        """Deserialize JSON data into MinAggregation object."""
+        return cls(
+            field=data["field"],
+            name=data.get("name"),
+            nested_path=data.get("nested_path"),
+            nested_filter=data.get("nested_filter")
+        )
 
 class MaxAggregation(BaseAggregation):
     def __init__(self, field, name=None, nested_path=None, nested_filter=None, aggs=None):
         super().__init__(field, name, nested_path, nested_filter, aggs)
 
     def to_elasticsearch(self):
+        """Convert MaxAggregation to an Elasticsearch-compatible format."""
         max_agg = {"max": {"field": self.field}}
+        
+        # ✅ Handle nested paths/filters if applicable
         max_agg = self._add_nested_clause(max_agg)
-        if self.aggs:  # Add nested aggregations if present
-            max_agg["aggs"] = build_aggregation_query_class(self.aggs) # Corrected
-        return {self.name: max_agg} if self.name else max_agg
+
+        # ✅ Add sub-aggregations if they exist
+        if self.aggs:
+            max_agg["aggs"] = build_aggregation_query_class(self.aggs)
+
+        # ✅ Ensure correct wrapping of aggregation under field name
+        return {self.name: max_agg} if self.name else {self.field: max_agg}
 
     def to_json(self):
-        return {"type": "max_aggregation", "field": self.field, "nested_path": self.nested_path, "nested_filter": self.nested_filter}
+        """Convert MaxAggregation to JSON format."""
+        json_data = {
+            "type": "max_aggregation",
+            "field": self.field,
+            "name": self.name,
+            "nested_path": self.nested_path,
+            "nested_filter": self.nested_filter
+        }
+
+        # ✅ Remove None values
+        return {k: v for k, v in json_data.items() if v is not None}
 
     @classmethod
     def from_json(cls, data):
-        return cls(data["field"], data.get("nested_path"), data.get("nested_filter"))
+        """Deserialize JSON data into MaxAggregation object."""
+        return cls(
+            field=data["field"],
+            name=data.get("name"),
+            nested_path=data.get("nested_path"),
+            nested_filter=data.get("nested_filter")
+        )
 
 class CardinalityAggregation(BaseAggregation):
     def __init__(self, field, name=None, precision_threshold=None, nested_path=None, nested_filter=None, aggs=None):
@@ -401,76 +446,110 @@ class CardinalityAggregation(BaseAggregation):
         self.precision_threshold = precision_threshold
 
     def to_elasticsearch(self):
+        """Convert CardinalityAggregation to an Elasticsearch-compatible format."""
         cardinality_agg = {"cardinality": {"field": self.field}}
+
+        # ✅ Add precision_threshold if present
         if self.precision_threshold is not None:
             cardinality_agg["cardinality"]["precision_threshold"] = self.precision_threshold
-        return {self.name: self._add_nested_clause(cardinality_agg)} if self.name else self._add_nested_clause(cardinality_agg)
+
+        # ✅ Handle nested paths/filters if applicable
+        cardinality_agg = self._add_nested_clause(cardinality_agg)
+
+        # ✅ Add sub-aggregations if they exist
+        if self.aggs:
+            cardinality_agg["aggs"] = build_aggregation_query_class(self.aggs)
+
+        # ✅ Ensure correct wrapping of aggregation under field name
+        return {self.name: cardinality_agg} if self.name else {self.field: cardinality_agg}
 
     def to_json(self):
-        return {
+        """Convert CardinalityAggregation to JSON format."""
+        json_data = {
             "type": "cardinality_aggregation",
             "field": self.field,
             "name": self.name,
             "precision_threshold": self.precision_threshold,
             "nested_path": self.nested_path,
-            "nested_filter": self.nested_filter,
-            "aggs": self.aggs,
+            "nested_filter": self.nested_filter
         }
+
+        # ✅ Remove None values
+        return {k: v for k, v in json_data.items() if v is not None}
 
     @classmethod
     def from_json(cls, data):
+        """Deserialize JSON data into CardinalityAggregation object."""
         return cls(
-            data["field"],
-            data.get("name"),
-            data.get("precision_threshold"),
-            data.get("nested_path"),
-            data.get("nested_filter"),
-            data.get("aggs"),
+            field=data["field"],
+            name=data.get("name"),
+            precision_threshold=data.get("precision_threshold"),
+            nested_path=data.get("nested_path"),
+            nested_filter=data.get("nested_filter")
         )
 
 class CompositeAggregation(BaseAggregation):
     def __init__(self, name=None, sources=None, size=10, after=None, order=None, nested_path=None, nested_filter=None, aggs=None):
-        super().__init__(None, name, nested_path, nested_filter, aggs)
+        super().__init__(None, name, nested_path, nested_filter, aggs)  # No direct field in composite
         self.sources = sources or []
         self.size = size
         self.after = after
-        self.order = order  # Add order parameter
+        self.order = order  # ✅ Support ordering
 
     def to_elasticsearch(self):
-        composite_agg = {"composite": {"sources": self.sources, "size": self.size}}
+        """Convert CompositeAggregation to an Elasticsearch-compatible format."""
+        composite_agg = {
+            "composite": {
+                "sources": self.sources,  # ✅ Handle source fields
+                "size": self.size
+            }
+        }
+
+        # ✅ Add optional `after` key for pagination
         if self.after:
             composite_agg["composite"]["after"] = self.after
 
+        # ✅ Add optional ordering dictionary
         if self.order:
-            composite_agg["composite"]["order"] = self.order  # Use the dictionary directly
+            composite_agg["composite"]["order"] = self.order  # Directly store as dictionary
 
-        return {self.name: self._add_nested_clause(composite_agg)} if self.name else self._add_nested_clause(composite_agg)
+        # ✅ Handle nested paths and filters if applicable
+        composite_agg = self._add_nested_clause(composite_agg)
 
+        # ✅ Add sub-aggregations if they exist
+        if self.aggs:
+            composite_agg["aggs"] = build_aggregation_query_class(self.aggs)
+
+        # ✅ Ensure correct wrapping of aggregation under field name
+        return {self.name: composite_agg} if self.name else composite_agg
 
     def to_json(self):
-        return {
+        """Convert CompositeAggregation to JSON format."""
+        json_data = {
             "type": "composite_aggregation",
             "name": self.name,
             "sources": self.sources,
             "size": self.size,
             "after": self.after,
-            "order": self.order,  # Add order to JSON
+            "order": self.order,
             "nested_path": self.nested_path,
-            "nested_filter": self.nested_filter,
-            "aggs": self.aggs,
+            "nested_filter": self.nested_filter
         }
+
+        # ✅ Remove None values
+        return {k: v for k, v in json_data.items() if v is not None}
 
     @classmethod
     def from_json(cls, data):
+        """Deserialize JSON data into CompositeAggregation object."""
         return cls(
-            data.get("name"),
-            data.get("sources"),
-            data.get("size"),
-            data.get("after"),
-            data.get("order"),  # Add order to from_json
-            data.get("nested_path"),
-            data.get("nested_filter"),
-            data.get("aggs"),
+            name=data.get("name"),
+            sources=data.get("sources"),
+            size=data.get("size", 10),  # Default to 10
+            after=data.get("after"),
+            order=data.get("order"),
+            nested_path=data.get("nested_path"),
+            nested_filter=data.get("nested_filter")
         )
 
 def create_single_aggregation_object(agg_def, name=None):

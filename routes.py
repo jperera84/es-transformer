@@ -1,5 +1,5 @@
 from flask import Blueprint
-from example_tests_objects import generate_avg_agg_object, generate_bool_filter_object, generate_date_histogram_agg_object, generate_histogram_agg_object, generate_ids_filter_object, generate_match_filter_object, generate_range_agg_object, generate_range_filter_object, generate_sort_object, generate_sum_agg_object, generate_term_filter_object, generate_terms_agg_object, generate_terms_filter_object, generate_wildcard_filter_object
+from example_tests_objects import generate_avg_agg_object, generate_bool_filter_object, generate_cardinality_agg_object, generate_composite_agg_object, generate_date_histogram_agg_object, generate_histogram_agg_object, generate_ids_filter_object, generate_match_filter_object, generate_max_agg_object, generate_range_agg_object, generate_range_filter_object, generate_sort_object, generate_sum_agg_object, generate_term_filter_object, generate_terms_agg_object, generate_terms_filter_object, generate_wildcard_filter_object
 from transformer import transform
 import json
 
@@ -50,6 +50,18 @@ def home():
     query14 = transformer.transform(
         generate_sum_agg_object()
     )
+    query15 = transformer.transform(
+        generate_sum_agg_object()
+    )
+    query16 = transformer.transform(
+        generate_max_agg_object()
+    )
+    query17 = transformer.transform(
+        generate_cardinality_agg_object()
+    )
+    query18 = transformer.transform(
+        generate_composite_agg_object()
+    )
     return prettify_query([
         query1, 
         query2, 
@@ -64,7 +76,11 @@ def home():
         query11, 
         query12, 
         query13,
-        query14
+        query14,
+        query15,
+        query16,
+        query17,
+        query18
     ])
 
 def prettify_query(query):
