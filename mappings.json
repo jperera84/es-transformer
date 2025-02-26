@@ -1,0 +1,206 @@
+{
+    "obj": {
+        "mappings": {
+            "dynamic": false,
+            "properties": {
+                "@timestamp": {
+                    "type": "date"
+                },
+                "access_time_string": {
+                    "type": "keyword",
+                    "ignore_above": 10240
+                },
+                "action_count": {
+                    "type": "unsigned_long"
+                },
+                "action_labels": {
+                    "type": "keyword",
+                    "ignore_above": 10240
+                },
+                "action_labels_formula_matches": {
+                    "type": "keyword",
+                    "ignore_above": 10240
+                },
+                "action_protocol": {
+                    "type":"keyword",
+                    "ignore_above": 10240
+                },
+                "action_time": {
+                    "type":"date"
+                },
+                "analyst_evaluation": {
+                    "type": "nested",
+                    "dynamic":false,
+                    "properties": {
+                        "action_comments": {
+                            "type": "text"
+                        },
+                        "action_correct": {
+                            "type":"boolean"
+                        }
+                    }
+                },
+                "analyst_notes": {
+                    "type": "nested",
+                    "dynamic":false,
+                    "properties": {
+                        "action": {
+                            "type":"keyword"
+                        },
+                        "created": {
+                            "type":"date",
+                            "format": "strict_date_time"
+                        },
+                        "created_by": {
+                            "type":"keyword"
+                        },
+                        "deleted": {
+                            "type":"boolean"
+                        },
+                        "draft": {
+                            "type":"boolean"
+                        },
+                        "event_id": {
+                            "type":"keyword"
+                        },
+                        "formula_id": {
+                            "type":"long"
+                        },
+                        "id": {
+                            "type":"keyword"
+                        },
+                        "last_updated": {
+                            "type":"date",
+                            "format": "strict_date_time"
+                        },
+                        "note": {
+                            "type": "text"
+                        }
+                    }
+                },
+                "client_access_id": {
+                    "type":"unsigned_long",
+                    "fields": {
+                        "keyword": {
+                            "type": "keyword",
+                            "ignore_above": 10240
+                        }
+                    }
+                },
+                "client_id": {
+                    "type":"unsigned_long",
+                    "fields": {
+                        "keyword": {
+                            "type": "keyword",
+                            "ignore_above": 10240
+                        }
+                    }
+                },
+                "content_after_format": {
+                    "type": "keyword",
+                    "ignore_above": 10240
+                },
+                "content_after_md5": {
+                    "type": "keyword",
+                    "ignore_above": 10240
+                },
+                "destination": {
+                    "properties": {
+                        "address": {
+                            "type": "keyword",
+                            "ignore_above": 10240
+                        },
+                        "ip": {
+                            "type": "ip"
+                        },
+                        "port": {
+                            "type": "long"
+                        }
+                    }
+                },
+                "destination_port": {
+                    "type": "integer",
+                    "fields": {
+                        "keyword": {
+                            "type":"keyword",
+                            "ignore_above": 10240
+                        }
+                    }
+                },
+                "destination_address": {
+                    "type": "ip"
+                },
+                "formula_matches_id": {
+                    "type":"long",
+                    "fields":{
+                        "keyword":{
+                            "type":"keyword",
+                            "ignore_above":10240
+                        }
+                    }
+                },
+                "url": {
+                    "properties":{
+                        "domain":{
+                            "type":"keyword",
+                            "ignore_above":10240
+                        },
+                        "path": {
+                            "type": "wildcard"
+                        }
+                    }
+                },
+                "source_address": {
+                    "type":"ip"
+                },
+                "event": {
+                    "properties":{
+                        "provider": {
+                            "type":"keyword",
+                            "ignore_above":10240
+                        }
+                    }
+                },
+                "trust_initiated": {
+                    "type":"boolean"
+                },
+                "formula_traffic_role": {
+                    "type":"keyword",
+                    "ignore_above":10240
+                },
+                "formula_metadata": {
+                    "properties":{
+                        "name": {
+                            "type":"keyword",
+                            "ignore_above":10240
+                        },
+                        "tags": {
+                            "properties":{
+                                "category": {
+                                    "type": "keyword",
+                                    "ignore_above":10240
+                                },
+                                "value": {
+                                    "type": "keyword",
+                                    "ignore_above":10240
+                                }
+                            }
+                        },
+                        "type": {
+                            "type":"keyword",
+                            "ignore_above":10240
+                        }
+                    }
+                },
+                "formula_matches_action_archiving_state": {
+                    "properties":{
+                        "type": {
+                            "type":"keyword",
+                            "ignore_above":10240
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

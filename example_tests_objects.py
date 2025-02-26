@@ -1,7 +1,7 @@
 def generate_ids_filter_object():
     return {
         "filters": [
-            { "ids": ["xxxxxxx", "000000000"] }
+            { "ids": ["1", "2"] }
         ]
     }
 
