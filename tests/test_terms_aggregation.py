@@ -1,55 +1,29 @@
 import unittest
-from transformer import TermsAggregation, AvgAggregation, MinAggregation, MaxAggregation, CardinalityAggregation
-import json
+from transformer.aggregation import TermsAggregation, create_single_aggregation_object
 
 class TestTermsAggregation(unittest.TestCase):
-    def test_terms_aggregation_to_elasticsearch(self):
-        agg = TermsAggregation("category")
-        expected = {'terms': {'field': 'category', 'size': 10}}
+
+    def test_traditional_terms_aggregation(self):
+        agg_def = {"terms": {"field": "category", "size": 20}}
+        agg = create_single_aggregation_object(agg_def, name="category_terms")
+        expected = {"category_terms": {"terms": {"field": "category", "size": 20}}}
         self.assertEqual(agg.to_elasticsearch(), expected)
 
-    def test_terms_aggregation_with_size(self):
-        agg = TermsAggregation("category", size=20)
-        expected = {"terms": {"field": "category", "size": 20}}  # Correct expected output
+    def test_simplified_terms_aggregation(self):
+        agg_def = ["terms", 20]  # Simplified format
+        agg = create_single_aggregation_object(agg_def, name="category")
+        expected = {"category": {"terms": {"field": "category", "size": 20}}}
         self.assertEqual(agg.to_elasticsearch(), expected)
 
-    def test_terms_aggregation_with_order(self):
-        agg = TermsAggregation("category", order={"_count": "desc"})
-        expected = {"terms": {"field": "category", "size": 10, "order": {"_count": "desc"}}}
-        self.assertEqual(agg.to_elasticsearch(), expected)
+    def test_invalid_format(self):
+        """Test that invalid format raises a TypeError"""
+        with self.assertRaises(TypeError):  # ✅ Now correctly expects TypeError
+            TermsAggregation(field=123, size="wrong")  # Invalid format: field should be string, size should be int
 
-    def test_terms_aggregation_with_nested_aggs(self):
-        agg = TermsAggregation(name="my_agg_name", field="category", size=10, aggs={
-            "my_sub_agg_name": {
-                "avg": {"field": "price"}
-            },
-            "product_count": {
-                "cardinality": {"field": "product_id"} # Example of another nested aggregation
-            }}
-        )
-        expected = {
-            "my_agg_name": {
-                "terms": {
-                    "field": "category",
-                    "size": 10
-                },
-                "aggs": {
-                    "my_sub_agg_name": {
-                        "avg": {
-                            "field": "price"
-                        }
-                    },
-                    "product_count": {
-                        "cardinality": {
-                            "field": "product_id"
-                        }
-                    }
-                }
-            }
-        }
-        self.assertDictEqual(agg.to_elasticsearch(), expected)
 
-    def test_terms_aggregation_with_min_doc_count(self): # New Test
-        agg = TermsAggregation("category", min_doc_count=5)
-        expected = {"terms": {"field": "category", "size": 10, "min_doc_count": 5}}
-        self.assertEqual(agg.to_elasticsearch(), expected)
+if __name__ == "__main__":
+    unittest.main()
+
+
+if __name__ == "__main__":
+    unittest.main()

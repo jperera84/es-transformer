@@ -48,8 +48,8 @@ class Transformer:
             filter_query = filter.build_filter_query_class(filters_data)
             if filter_query:
                 query["query"] = filter_query
-        else:
-            query["query"] = {"match_all": {}}  # Ensure query is not empty
+        elif not aggs_data:  # Only insert match_all when there are NO aggregations
+            query["query"] = {"match_all": {}}
 
         if sort_data:
             query["sort"] = [sort.to_elasticsearch() for sort in sort_data]

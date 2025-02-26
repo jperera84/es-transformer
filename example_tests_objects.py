@@ -110,3 +110,55 @@ def generate_sort_object():
             }
         ]
     }
+
+def generate_terms_agg_object():
+    return {
+        "aggs": {
+            "category": ["terms", 20]  # ["AggregationType", Size]
+        }
+    }
+
+def generate_avg_agg_object():
+    return {
+        "aggs": {
+            "avg_price": ["avg", "price"]  # ✅ Simplified format: ["aggregation_type", field_name]
+        }
+    }
+
+def generate_range_agg_object():
+    return {
+        "aggs": {
+            "price": ["range", [{"to": 50}, {"from": 50, "to": 100}, {"from": 100}]]  # ✅ Correct field reference
+        }
+    }
+
+def generate_histogram_agg_object():
+    return {
+        "aggs": {
+            "price_histogram": ["histogram", 20, {"min": 0, "max": 1000}, 1, True]  # ✅ Includes optional params
+        }
+    }
+
+def generate_date_histogram_agg_object():
+    return {
+        "aggs": {
+            "date_histogram_agg": ["date_histogram", "1d"],  # ✅ Simplified format
+            "custom_date_histogram": {
+                "date_histogram": {
+                    "field": "timestamp",
+                    "calendar_interval": "1d",
+                    "format": "yyyy-MM-dd",
+                    "time_zone": "UTC",
+                    "min_doc_count": 0,
+                    "extended_bounds": {"min": "2023-01-01", "max": "2023-12-31"}
+                }
+            }
+        }
+    }
+
+def generate_sum_agg_object():
+    return {
+        "aggs": {
+            "total_price": ["sum"]  # ✅ Simplified format: ["aggregation_type"]
+        }
+    }

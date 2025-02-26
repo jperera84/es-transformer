@@ -1,5 +1,5 @@
 from flask import Blueprint
-from example_tests_objects import generate_bool_filter_object, generate_ids_filter_object, generate_match_filter_object, generate_range_filter_object, generate_sort_object, generate_term_filter_object, generate_terms_filter_object, generate_wildcard_filter_object
+from example_tests_objects import generate_avg_agg_object, generate_bool_filter_object, generate_date_histogram_agg_object, generate_histogram_agg_object, generate_ids_filter_object, generate_match_filter_object, generate_range_agg_object, generate_range_filter_object, generate_sort_object, generate_sum_agg_object, generate_term_filter_object, generate_terms_agg_object, generate_terms_filter_object, generate_wildcard_filter_object
 from transformer import transform
 import json
 
@@ -32,7 +32,40 @@ def home():
     query8 = transformer.transform(
         generate_sort_object()
     )
-    return prettify_query([query1, query2, query3, query4, query5, query6, query7, query8])
+    query9 = transformer.transform(
+        generate_terms_agg_object()
+    )
+    query10 = transformer.transform(
+        generate_avg_agg_object()
+    )
+    query11 = transformer.transform(
+        generate_range_agg_object()
+    )
+    query12 = transformer.transform(
+        generate_histogram_agg_object()
+    )
+    query13 = transformer.transform(
+        generate_date_histogram_agg_object()
+    )
+    query14 = transformer.transform(
+        generate_sum_agg_object()
+    )
+    return prettify_query([
+        query1, 
+        query2, 
+        query3, 
+        query4, 
+        query5, 
+        query6, 
+        query7, 
+        query8, 
+        query9, 
+        query10, 
+        query11, 
+        query12, 
+        query13,
+        query14
+    ])
 
 def prettify_query(query):
     """Prettifies a nested dictionary (like an Elasticsearch query) as JSON."""

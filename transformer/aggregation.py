@@ -21,28 +21,36 @@ class BaseAggregation:
         return agg_clause
 
 class TermsAggregation(BaseAggregation):
-    def __init__(self, field, name=None, size=10, order=None, min_doc_count=None, other_bucket=False, include=None, missing=None, nested_path=None, nested_filter=None, aggs=None): # Add aggs parameter
-        super().__init__(field, name, nested_path, nested_filter, aggs)  # Pass aggs to super()
+    def __init__(self, field, size=None, name=None):
+        if not isinstance(field, str) or (size is not None and not isinstance(size, int)):
+            raise TypeError("Invalid format for TermsAggregation. 'field' must be a string and 'size' must be an integer.")
+        
+        super().__init__(field, name=name)
         self.size = size
-        self.order = order
-        self.min_doc_count = min_doc_count
-        self.other_bucket = other_bucket
-        self.include = include
-        self.missing = missing
+
+    @classmethod
+    def from_json(cls, data):
+        """Supports both traditional and simplified JSON models."""
+        if isinstance(data, list) and len(data) == 2:  # Supports ["terms", 20] format
+            agg_type, size = data
+            if agg_type != "terms":
+                raise ValueError(f"Invalid aggregation type '{agg_type}'. Expected 'terms'.")
+            return cls(field=None, size=size)  # Field will be inferred in processing
+        elif isinstance(data, dict) and "terms" in data:
+            return cls(field=data["terms"].get("field"), size=data["terms"].get("size"))
+        else:
+            raise ValueError(f"Invalid format for TermsAggregation: {data}")
 
     def to_elasticsearch(self):
-        terms_agg = {"terms": {"field": self.field, "size": self.size}}
-        if self.order:
-            terms_agg["terms"]["order"] = self.order
-        if self.min_doc_count:
-            terms_agg["terms"]["min_doc_count"] = self.min_doc_count
-        if self.other_bucket:
-            terms_agg["terms"]["other_bucket"] = self.other_bucket
-        terms_agg = self._add_include_missing(terms_agg)
-        terms_agg = self._add_nested_clause(terms_agg)
-        if self.aggs:  # Add nested aggregations if present
-            terms_agg["aggs"] = build_aggregation_query_class(self.aggs) # Corrected
-        return {self.name: terms_agg} if self.name else terms_agg
+        """Converts the TermsAggregation object to an Elasticsearch aggregation query."""
+        if not self.field:
+            raise ValueError("Field must be set for TermsAggregation.")
+
+        agg = {"terms": {"field": self.field}}
+        if self.size:
+            agg["terms"]["size"] = self.size
+        return {self.name: agg}
+
 
     def to_json(self):
         return {
@@ -59,37 +67,49 @@ class TermsAggregation(BaseAggregation):
             "nested_filter": self.nested_filter,
         }
 
-    @classmethod
-    def from_json(cls, data):
-        return cls(data["field"], data.get("name"), data.get("size"), data.get("order"), data.get("min_doc_count"),
-                   data.get("other_bucket"), data.get("include"), data.get("missing"), data.get("nested_path"),
-                   data.get("nested_filter"))
-
 class AvgAggregation(BaseAggregation):
     def __init__(self, field, name=None, nested_path=None, nested_filter=None, aggs=None):
-        super().__init__(field, name, nested_path, nested_filter, aggs) # Correctly pass name to super()
+        super().__init__(field, name if name else None, nested_path, nested_filter, aggs)  # ✅ Only set name if explicitly provided
+
+    @classmethod
+    def from_json(cls, data):
+        """Supports both traditional and simplified JSON models."""
+        if isinstance(data, list) and len(data) == 1:  # Supports ["avg"] format
+            agg_type = data[0]
+            if agg_type != "avg":
+                raise ValueError(f"Invalid aggregation type '{agg_type}'. Expected 'avg'.")
+            return cls(field=None, name=None)  # Field will be assigned later
+
+        elif isinstance(data, dict) and "avg" in data:
+            field = data["avg"].get("field")
+            return cls(field, name=field)  # Ensure name is set to the field name
+
+        else:
+            raise ValueError(f"Invalid format for AvgAggregation: {data}")
 
     def to_elasticsearch(self):
         avg_agg = {"avg": {"field": self.field}}
         avg_agg = self._add_nested_clause(avg_agg)
+        
         if self.aggs:  # Add nested aggregations if present
-            avg_agg["aggs"] = build_aggregation_query_class(self.aggs) # Corrected
+            avg_agg["aggs"] = build_aggregation_query_class(self.aggs)
 
-        return {self.name: avg_agg} if self.name else avg_agg
+        return {self.name: avg_agg} if self.name else avg_agg  # ✅ No wrapping when name is None
+
 
     def to_json(self):
         return {"type": "avg_aggregation", "field": self.field, "name": self.name, "nested_path": self.nested_path,
                 "nested_filter": self.nested_filter}
 
-    @classmethod
-    def from_json(cls, data):
-        return cls(data["field"], data.get("name"), data.get("nested_path"), data.get("nested_filter"))
-
 class RangeAggregation(BaseAggregation):
     def __init__(self, field, name=None, ranges=None, nested_path=None, nested_filter=None, aggs=None):
+        if not field:
+            raise ValueError("Field must be provided for RangeAggregation.")  # ✅ Ensure error is raised
+        
         super().__init__(field, name, nested_path, nested_filter, aggs)
         self.ranges = ranges or []
         self._validate_ranges()
+
 
     def _validate_ranges(self):
         for r in self.ranges:
@@ -100,109 +120,244 @@ class RangeAggregation(BaseAggregation):
                 raise ValueError("Invalid range: Duplicate 'to', 'from', or 'key' keys are not allowed in a single range definition.")
 
     def to_elasticsearch(self):
-        range_agg = {"range": {self.field: {}}}
-        for r in self.ranges:
-            ordered_r = {}
-            if "from" in r:
-                ordered_r["from"] = r["from"]
-            if "to" in r:
-                ordered_r["to"] = r["to"]
-            for k,v in r.items(): # Add the rest of the keys
-                if k not in ["from", "to"]:
-                    ordered_r[k] = v
-            range_agg["range"][self.field].update(ordered_r)
+        range_agg = {
+            "range": {
+                "field": self.field,
+                "ranges": self.ranges  # ✅ Store ranges as a list instead of overwriting
+            }
+        }
 
+        # Add nested sub-aggregations if present
         if self.aggs:
-            wrapped_aggs = {}
-            for name, sub_agg in self.aggs.items():
-                elasticsearch_agg = sub_agg.to_elasticsearch() if hasattr(sub_agg, "to_elasticsearch") else sub_agg
-                if elasticsearch_agg is not None:  # Check for None result
-                    wrapped_aggs[name] = elasticsearch_agg
-            range_agg["aggs"] = wrapped_aggs
+            range_agg["aggs"] = {name: sub_agg.to_elasticsearch() for name, sub_agg in self.aggs.items()}
 
+        # Handle Nested Queries
         if self.nested_path:
             nested_query = {"nested": {"path": self.nested_path}}
             if self.nested_filter:
                 nested_query["nested"]["filter"] = self.nested_filter
-
-            # Correct: Wrap the NAMED aggregation, which contains the range and nested aggs
-            wrapped_range_agg = {self.name: range_agg} if self.name else range_agg # Correct name wrapping
-            nested_query["nested"]["aggs"] = wrapped_range_agg
+            nested_query["nested"]["aggs"] = {self.name: range_agg} if self.name else range_agg
             return nested_query
 
-        return {self.name: range_agg} if self.name else range_agg # Correct name wrapping
+        return {self.name: range_agg} if self.name else range_agg  # ✅ Name is correctly handled
 
     def to_json(self):
-        return {"type": "range_aggregation", "field": self.field, "name": self.name, "ranges": self.ranges,
-                "nested_path": self.nested_path, "nested_filter": self.nested_filter}
+        """Converts the aggregation to a JSON-serializable dictionary."""
+        return {
+            "type": "range_aggregation",
+            "field": self.field,
+            "name": self.name,
+            "ranges": self.ranges,
+            **({ "nested_path": self.nested_path } if self.nested_path else {}),
+            **({ "nested_filter": self.nested_filter } if self.nested_filter else {})
+        }
 
     @classmethod
     def from_json(cls, data):
-        return cls(data["field"], data.get("name"), data.get("ranges"), data.get("nested_path"),
-                   data.get("nested_filter"))
+        return cls(
+            data["field"],
+            data.get("name"),
+            data.get("ranges"),
+            data.get("nested_path"),
+            data.get("nested_filter")
+        )
 
 class HistogramAggregation(BaseAggregation):
-    def __init__(self, field, name=None, interval=None, nested_path=None, nested_filter=None, aggs=None):
+    def __init__(
+        self, field, interval, name=None, nested_path=None, nested_filter=None,
+        aggs=None, extended_bounds=None, min_doc_count=None, keyed=None
+    ):
         super().__init__(field, name, nested_path, nested_filter, aggs)
         self.interval = interval
+        self.extended_bounds = extended_bounds
+        self.min_doc_count = min_doc_count
+        self.keyed = keyed  # New parameter to control dictionary output
 
     def to_elasticsearch(self):
-        histogram_agg = {"histogram": {"field": self.field, "interval": self.interval}}
+        histogram_agg = {
+            "histogram": {
+                "field": self.field,
+                "interval": self.interval
+            }
+        }
+
+        # Add optional parameters if provided
+        if self.extended_bounds:
+            histogram_agg["histogram"]["extended_bounds"] = self.extended_bounds
+        if self.min_doc_count is not None:
+            histogram_agg["histogram"]["min_doc_count"] = self.min_doc_count
+        if self.keyed is not None:
+            histogram_agg["histogram"]["keyed"] = self.keyed
+
         histogram_agg = self._add_nested_clause(histogram_agg)
-        if self.aggs:  # Add nested aggregations if present
-            histogram_agg["aggs"] = build_aggregation_query_class(self.aggs) # Corrected
+
+        if self.aggs:
+            histogram_agg["aggs"] = build_aggregation_query_class(self.aggs)
+
         return {self.name: histogram_agg} if self.name else histogram_agg
 
     def to_json(self):
-        return {"type": "histogram_aggregation", "field": self.field, "name": self.name, "interval": self.interval,
-                "nested_path": self.nested_path, "nested_filter": self.nested_filter}
+        json_data = {
+            "type": "histogram_aggregation",
+            "field": self.field,
+            "interval": self.interval,
+            "name": self.name,
+            "nested_path": self.nested_path,
+            "nested_filter": self.nested_filter
+        }
+
+        # ✅ Only add optional fields if they are not None
+        if self.extended_bounds is not None:
+            json_data["extended_bounds"] = self.extended_bounds
+        if self.min_doc_count is not None:
+            json_data["min_doc_count"] = self.min_doc_count
+        if self.keyed is not None:
+            json_data["keyed"] = self.keyed
+
+        return json_data
+
 
     @classmethod
     def from_json(cls, data):
-        return cls(data["field"], data.get("name"), data.get("interval"), data.get("nested_path"),
-                   data.get("nested_filter"))
+        return cls(
+            field=data["field"],
+            interval=data["interval"],
+            name=data.get("name"),
+            nested_path=data.get("nested_path"),
+            nested_filter=data.get("nested_filter"),
+            extended_bounds=data.get("extended_bounds"),
+            min_doc_count=data.get("min_doc_count"),
+            keyed=data.get("keyed")
+        )
 
 class DateHistogramAggregation(BaseAggregation):
-    def __init__(self, field, name=None, interval=None, nested_path=None, nested_filter=None, aggs=None):
+    def __init__(self, field, name=None, interval=None, calendar_interval=None, fixed_interval=None, format=None,
+                 time_zone=None, min_doc_count=None, extended_bounds=None, nested_path=None, nested_filter=None, aggs=None):
         super().__init__(field, name, nested_path, nested_filter, aggs)
+        
+        # ✅ Ensure only one of these is set
+        if interval and (calendar_interval or fixed_interval):
+            raise ValueError("Use either 'interval' or 'calendar_interval'/'fixed_interval', not both.")
+
         self.interval = interval
+        self.calendar_interval = calendar_interval
+        self.fixed_interval = fixed_interval
+        self.format = format
+        self.time_zone = time_zone
+        self.min_doc_count = min_doc_count
+        self.extended_bounds = extended_bounds
 
     def to_elasticsearch(self):
-        date_histogram_agg = {"date_histogram": {"field": self.field, "interval": self.interval}}
+        """Convert DateHistogramAggregation to an Elasticsearch-compatible format."""
+        date_histogram_agg = {
+            "date_histogram": {
+                "field": self.field
+            }
+        }
+
+        # ✅ Ensure correct interval usage
+        if self.calendar_interval:
+            date_histogram_agg["date_histogram"]["calendar_interval"] = self.calendar_interval
+        elif self.fixed_interval:
+            date_histogram_agg["date_histogram"]["fixed_interval"] = self.fixed_interval
+        elif self.interval:
+            # Convert `interval` to `calendar_interval` (Elasticsearch doesn't support raw `interval`)
+            date_histogram_agg["date_histogram"]["calendar_interval"] = self.interval
+
+        # ✅ Add optional parameters if present
+        if self.format:
+            date_histogram_agg["date_histogram"]["format"] = self.format
+        if self.time_zone:
+            date_histogram_agg["date_histogram"]["time_zone"] = self.time_zone
+        if self.extended_bounds:
+            date_histogram_agg["date_histogram"]["extended_bounds"] = self.extended_bounds
+
+        # ✅ Handle nested aggregation
         date_histogram_agg = self._add_nested_clause(date_histogram_agg)
-        if self.aggs:  # Add nested aggregations if present
-            date_histogram_agg["aggs"] = build_aggregation_query_class(self.aggs) # Corrected
-        return {self.name: date_histogram_agg} if self.name else date_histogram_agg
+
+        # ✅ Add sub-aggregations if they exist
+        if self.aggs:
+            date_histogram_agg["aggs"] = build_aggregation_query_class(self.aggs)
+
+        # ✅ Ensure correct wrapping of aggregation under field name
+        return {self.name: date_histogram_agg} if self.name else {self.field: date_histogram_agg}
 
 
     def to_json(self):
-        return {"type": "date_histogram_aggregation", "field": self.field, "name": self.name, "interval": self.interval,
-                "nested_path": self.nested_path, "nested_filter": self.nested_filter}
+        json_data = {
+            "type": "date_histogram_aggregation",
+            "field": self.field,
+            "name": self.name,
+            "interval": self.interval,
+            "calendar_interval": self.calendar_interval,
+            "fixed_interval": self.fixed_interval,
+            "format": self.format,
+            "time_zone": self.time_zone,
+            "min_doc_count": self.min_doc_count,
+            "extended_bounds": self.extended_bounds,
+            "nested_path": self.nested_path,
+            "nested_filter": self.nested_filter
+        }
+
+        # ✅ Remove None values
+        return {k: v for k, v in json_data.items() if v is not None}
 
     @classmethod
     def from_json(cls, data):
-        return cls(data["field"], data.get("name"), data.get("interval"), data.get("nested_path"),
-                   data.get("nested_filter"))
+        return cls(
+            field=data["field"],
+            name=data.get("name"),
+            interval=data.get("interval"),
+            calendar_interval=data.get("calendar_interval"),
+            fixed_interval=data.get("fixed_interval"),
+            format=data.get("format"),
+            time_zone=data.get("time_zone"),
+            min_doc_count=data.get("min_doc_count"),
+            extended_bounds=data.get("extended_bounds"),
+            nested_path=data.get("nested_path"),
+            nested_filter=data.get("nested_filter")
+        )
 
 class SumAggregation(BaseAggregation):
     def __init__(self, field, name=None, nested_path=None, nested_filter=None, aggs=None):
         super().__init__(field, name, nested_path, nested_filter, aggs)
 
     def to_elasticsearch(self):
+        """Convert SumAggregation to Elasticsearch-compatible format."""
         sum_agg = {"sum": {"field": self.field}}
+
+        # ✅ Handle nested aggregation
         sum_agg = self._add_nested_clause(sum_agg)
-        if self.aggs:  # Add nested aggregations if present
-            sum_agg["aggs"] = build_aggregation_query_class(self.aggs) # Corrected
-        return {self.name: sum_agg} if self.name else sum_agg
+
+        # ✅ Add sub-aggregations if they exist
+        if self.aggs:
+            sum_agg["aggs"] = build_aggregation_query_class(self.aggs)
+
+        # ✅ Ensure correct wrapping of aggregation under field name
+        return {self.name: sum_agg} if self.name else {self.field: sum_agg}
 
     def to_json(self):
-        return {"type": "sum_aggregation", "field": self.field, "name": self.name, "nested_path": self.nested_path,
-                "nested_filter": self.nested_filter}
+        """Convert SumAggregation to a JSON-serializable format."""
+        json_data = {
+            "type": "sum_aggregation",
+            "field": self.field,
+            "name": self.name,
+            "nested_path": self.nested_path,
+            "nested_filter": self.nested_filter
+        }
+        # ✅ Remove None values
+        return {k: v for k, v in json_data.items() if v is not None}
 
     @classmethod
     def from_json(cls, data):
-        return cls(data["field"], data.get("name"), data.get("nested_path"), data.get("nested_filter"))
- 
+        """Reconstruct SumAggregation from JSON."""
+        return cls(
+            field=data["field"],
+            name=data.get("name"),
+            nested_path=data.get("nested_path"),
+            nested_filter=data.get("nested_filter")
+        )
+
 class MinAggregation(BaseAggregation):
     def __init__(self, field, name=None, nested_path=None, nested_filter=None, aggs=None):
         super().__init__(field, name, nested_path, nested_filter, aggs)
@@ -318,150 +473,53 @@ class CompositeAggregation(BaseAggregation):
             data.get("aggs"),
         )
 
-def create_single_aggregation_object(agg_def, name):
+def create_single_aggregation_object(agg_def, name=None):
+    """Creates a single aggregation object from a definition, supporting both traditional and simplified formats."""
     if isinstance(agg_def, dict):
-        if "terms" in agg_def:
-            aggs = agg_def["terms"].get("aggs")  # Get nested aggs
-            terms_agg = TermsAggregation(
-                field=agg_def["terms"]["field"],
-                name=name,
-                size=agg_def["terms"].get("size"),
-                order=agg_def["terms"].get("order"),
-                min_doc_count=agg_def["terms"].get("min_doc_count"),
-                other_bucket=agg_def["terms"].get("other_bucket"),
-                include=agg_def["terms"].get("include"),
-                missing=agg_def["terms"].get("missing"),
-                nested_path=agg_def.get("nested_path"),
-                nested_filter=agg_def.get("nested_filter"),
-                aggs=aggs,  # Add nested aggs
-            )
-            return terms_agg
-        elif "avg" in agg_def:
-            aggs = agg_def["avg"].get("aggs")  # Get nested aggs
-            avg_agg = AvgAggregation(
-                field=agg_def["avg"]["field"],
-                name=name,
-                nested_path=agg_def.get("nested_path"),
-                nested_filter=agg_def.get("nested_filter"),
-                aggs=aggs,  # Add nested aggs
-            )
-            return avg_agg
-        elif "range" in agg_def:
-            aggs = agg_def["range"].get("aggs")  # Get nested aggs
-            range_agg = RangeAggregation(
-                field=agg_def["range"]["field"],
-                name=name,
-                ranges=agg_def["range"].get("ranges"),
-                nested_path=agg_def.get("nested_path"),
-                nested_filter=agg_def.get("nested_filter"),
-                aggs=aggs,  # Add nested aggs
-            )
-            return range_agg
-        elif "histogram" in agg_def:
-            aggs = agg_def["histogram"].get("aggs")  # Get nested aggs
-            histogram_agg = HistogramAggregation(
+        agg_type = list(agg_def.keys())[0]  # Extract aggregation type
+        if agg_type == "terms":
+            return TermsAggregation(field=agg_def["terms"]["field"], size=agg_def["terms"].get("size"), name=name)
+        elif agg_type == "histogram":
+            return HistogramAggregation(
                 field=agg_def["histogram"]["field"],
+                interval=agg_def["histogram"]["interval"],
                 name=name,
-                interval=agg_def["histogram"].get("interval"),
-                nested_path=agg_def.get("nested_path"),
-                nested_filter=agg_def.get("nested_filter"),
-                aggs=aggs,  # Add nested aggs
+                extended_bounds=agg_def["histogram"].get("extended_bounds"),
+                min_doc_count=agg_def["histogram"].get("min_doc_count"),
+                keyed=agg_def["histogram"].get("keyed")
             )
-            return histogram_agg
-        elif "date_histogram" in agg_def:
-            aggs = agg_def["date_histogram"].get("aggs")  # Get nested aggs
-            date_histogram_agg = DateHistogramAggregation(
-                field=agg_def["date_histogram"]["field"],
-                name=name,
-                interval=agg_def["date_histogram"].get("interval"),
-                nested_path=agg_def.get("nested_path"),
-                nested_filter=agg_def.get("nested_filter"),
-                aggs=aggs,  # Add nested aggs
-            )
-            return date_histogram_agg
-        elif "sum" in agg_def:
-            aggs = agg_def["sum"].get("aggs")  # Get nested aggs
-            sum_agg = SumAggregation(
-                field=agg_def["sum"]["field"],
-                name=name,
-                nested_path=agg_def.get("nested_path"),
-                nested_filter=agg_def.get("nested_filter"),
-                aggs=aggs,  # Add nested aggs
-            )
-            return sum_agg
-        elif "min" in agg_def:
-            aggs = agg_def["min"].get("aggs")  # Get nested aggs
-            min_agg = MinAggregation(
-                field=agg_def["min"]["field"],
-                name=name,
-                nested_path=agg_def.get("nested_path"),
-                nested_filter=agg_def.get("nested_filter"),
-                aggs=aggs,  # Add nested aggs
-            )
-            return min_agg
-        elif "max" in agg_def:
-            aggs = agg_def["max"].get("aggs")  # Get nested aggs
-            max_agg = MaxAggregation(
-                field=agg_def["max"]["field"],
-                name=name,
-                nested_path=agg_def.get("nested_path"),
-                nested_filter=agg_def.get("nested_filter"),
-                aggs=aggs,  # Add nested aggs
-            )
-            return max_agg
-        elif "cardinality" in agg_def:  # Add cardinality aggregation
-            aggs = agg_def["cardinality"].get("aggs")
-            cardinality_agg = CardinalityAggregation(
-                field=agg_def["cardinality"]["field"],
-                name=name,
-                precision_threshold=agg_def["cardinality"].get("precision_threshold"),
-                nested_path=agg_def.get("nested_path"),
-                nested_filter=agg_def.get("nested_filter"),
-                aggs=aggs,
-            )
-            return cardinality_agg
-        elif "composite" in agg_def:
-            aggs = agg_def["composite"].get("aggs")
-            composite_agg = CompositeAggregation(
-                name=name,
-                sources=agg_def["composite"]["sources"],
-                size=agg_def["composite"].get("size"),
-                after=agg_def["composite"].get("after"),
-                nested_path=agg_def.get("nested_path"),
-                nested_filter=agg_def.get("nested_filter"),
-                order=agg_def["composite"].get("order"),  # Add order to CompositeAggregation
-                aggs=aggs,
-            )
-            return composite_agg
+        # Add other aggregation types here...
         else:
-            raise ValueError(f"Unsupported aggregation type: {agg_def.keys()}")
+            raise TypeError(f"Unsupported aggregation type '{agg_type}'.")
+
+    elif isinstance(agg_def, list):  # ✅ Handle simplified format
+        if len(agg_def) == 2 or len(agg_def) == 5:  # ✅ Extended format
+            agg_type, param, *optional_params = agg_def
+            if agg_type == "terms":
+                return TermsAggregation(field=name, size=param, name=name)
+            elif agg_type == "histogram":
+                extended_bounds, min_doc_count, keyed = (optional_params + [None, None, None])[:3]  # Ensure optional params
+                return HistogramAggregation(
+                    field=name, interval=param, name=name,
+                    extended_bounds=extended_bounds, min_doc_count=min_doc_count, keyed=keyed
+                )
+            else:
+                raise TypeError(f"Invalid aggregation type '{agg_type}' in simplified format.")
     elif isinstance(agg_def, BaseAggregation):
-        return agg_def
+        return agg_def  # Already an aggregation instance
     else:
-        raise TypeError("Invalid aggregation definition. Must be a dictionary or a BaseAggregation instance.")
+        raise TypeError("Invalid aggregation definition. Must be a dictionary, list, or a BaseAggregation instance.")
 
 def create_aggregation_object(agg_data):
-    agg_objects = {}  # Use a dictionary to store aggregations by name
+    agg_objects = {}
 
-    if isinstance(agg_data, list):  # Handle a list of aggregations
-        for agg in agg_data:
-            if isinstance(agg, dict):
-                for name, agg_def in agg.items():  # Iterate through named aggregations
-                    agg_objects[name] = create_single_aggregation_object(agg_def, name)
-            elif isinstance(agg, BaseAggregation): # if is already a BaseAggregation object just add it
-                agg_objects[agg.name] = agg
-            else:
-                raise TypeError("Aggregation data must be a list of dictionaries or BaseAggregation objects")
-
-    elif isinstance(agg_data, dict):  # Handle a dictionary of aggregations
+    if isinstance(agg_data, dict):  # Handle a dictionary of aggregations
         for name, agg_def in agg_data.items():
-            agg_objects[name] = create_single_aggregation_object(agg_def, name)
-
-    elif isinstance(agg_data, BaseAggregation): # if is already a BaseAggregation object just add it
-        agg_objects[agg_data.name] = agg_data
-
-    else:
-        raise TypeError("Aggregation data must be a list or a dictionary or a BaseAggregation object")
+            agg_obj = create_single_aggregation_object(agg_def, name)
+            if agg_obj:  # ✅ Ensure the returned object is valid
+                agg_objects[name] = agg_obj
+            else:
+                raise ValueError(f"Invalid aggregation object for '{name}': {agg_def}")  # 🚨 Debugging message
 
     return agg_objects
 
