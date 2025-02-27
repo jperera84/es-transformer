@@ -9,7 +9,7 @@ home_route = Blueprint('home_route', __name__)
 def home():
     transformer = transform.Transformer("my_events")
     query = transformer.transform(
-        generate_bool_filter_object()
+        generate_terms_agg_object()
     )
     print(prettify(query))
     query_executor = QueryExecutor()

@@ -32,35 +32,25 @@ class Transformer:
         for sort_data in sorts:
             sort_list.append(sort.create_sort_object(sort_data))
 
-        if aggs:
-            self.transformation["steps"].append({"aggs": aggs})
-
         return self.build_elasticsearch_query(filters_list, sort_list, aggs, size)
 
+    def build_elasticsearch_query(self, filters_list, sort_list, aggs, size):
+        query_body = {}
 
-    def build_elasticsearch_query(self, filters_data, sort_data=None, aggs_data=None, size=20):
-        """Builds an Elasticsearch query with optional sorting and ensures a valid query."""
+        # ✅ Apply filters if they exist
+        if filters_list:
+            query_body["query"] = filter.BoolFilter(must=filters_list).to_elasticsearch()
+        elif aggs:  
+            query_body["size"] = 0  # ✅ Force size=0 if only aggregations exist
+        else:
+            query_body["query"] = {"match_all": {}}  # ✅ Ensure valid query
 
-        query = {"query": {}}
+        # ✅ Apply sorting if present
+        if sort_list:
+            query_body["sort"] = [sort_obj.to_elasticsearch() for sort_obj in sort_list]
 
-        # Ensure at least one filter exists
-        if filters_data:
-            filter_query = filter.build_filter_query_class(filters_data)
-            if filter_query:
-                query["query"] = filter_query
-        elif not aggs_data:  # Only insert match_all when there are NO aggregations
-            query["query"] = {"match_all": {}}
+        # ✅ Apply aggregations if present
+        if aggs:
+            query_body["aggs"] = aggregation.build_aggregation_query_class(aggs)
 
-        if sort_data:
-            query["sort"] = [sort.to_elasticsearch() for sort in sort_data]
-
-        if aggs_data:
-            aggs_query = aggregation.build_aggregation_query_class(aggs_data)
-            if aggs_query:
-                query["aggs"] = aggs_query
-
-        if size is not None:
-            query["size"] = size
-
-        return query
-
+        return query_body

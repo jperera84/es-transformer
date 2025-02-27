@@ -108,7 +108,7 @@ def generate_sort_object():
 def generate_terms_agg_object():
     return {
         "aggs": {
-            "category": ["terms", 20]  # ["AggregationType", Size]
+            "formula_metadata.tags.value": ["terms", 20]  # ["AggregationType", Size]
         }
     }
 
