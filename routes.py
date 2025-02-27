@@ -8,13 +8,14 @@ home_route = Blueprint('home_route', __name__)
 @home_route.route("/", methods=["GET"])
 def home():
     transformer = transform.Transformer("my_events")
-    query1 = transformer.transform(
-        generate_ids_filter_object()
+    query = transformer.transform(
+        generate_bool_filter_object()
     )
-    print(prettify(query1))
+    print(prettify(query))
     query_executor = QueryExecutor()
-    response = query_executor.execute_query(query1)
+    response = query_executor.execute_query(query)
     return prettify(response.body)  # Return the results
+
 
 def prettify(query):
     """Prettifies a nested dictionary (like an Elasticsearch query) as JSON."""

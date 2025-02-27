@@ -309,67 +309,57 @@ class BoolFilter:
         return cls(must=must, must_not=must_not, should=should, minimum_should_match=minimum_should_match)
 
 def create_filter_object(filter_data):
-    """Recursively converts a simplified data model into Elasticsearch filter objects."""
-    
-    if isinstance(filter_data, list):  
-        # ✅ Handle AND condition (must)
-        return BoolFilter(must=[create_filter_object(fd) for fd in filter_data])
+    """Creates a filter object for Elasticsearch based on the data model."""
 
-    elif isinstance(filter_data, dict):
+    if isinstance(filter_data, dict):
         for field, value in filter_data.items():
-            # ✅ Handle `ids` filter separately
-            if field == "ids" and isinstance(value, list):
-                return IdsFilter(value)
+            if isinstance(value, list):  
+                # ✅ If all values are simple (strings/numbers), decide `terms` or `match`
+                if all(isinstance(v, (str, int, float)) for v in value):
+                    if field.endswith(".keyword") or "id" in field or "tags" in field:  
+                        return TermsFilter(field, value)  # ✅ Exact match → `terms`
+                    else:
+                        should_clauses = [MatchFilter(field, v) for v in value]
+                        return BoolFilter(should=should_clauses, minimum_should_match=1)  
 
-            elif isinstance(value, list):
-                # ✅ Fix: Detect `should` (OR) conditions correctly
-                if len(value) > 1 and isinstance(value[-1], dict) and "minimum_should_match" in value[-1]:
-                    minimum_should_match = value[-1]["minimum_should_match"]
-                    conditions = value[:-1]  # Remove `minimum_should_match` dict from the list
-                    
-                    return BoolFilter(
-                        should=[create_filter_object({field: cond}) for cond in conditions],
-                        minimum_should_match=minimum_should_match
-                    )
-                
-                # ✅ Default case: This is a `terms` query
-                return TermsFilter(field, value)
-
-            elif isinstance(value, dict):
-                # ✅ Handle wildcard filters
-                if "wildcard" in value:
-                    return WildcardFilter(field, value["wildcard"], boost=value.get("boost"))
-
-                # ✅ Fix: Ensure boost applies only to `terms` queries
-                elif "boost" in value and isinstance(value["boost"], (int, float)) and field in value:
-                    return BoolFilter(
-                        should=[TermsFilter(field, value[field])],
-                        minimum_should_match=1
-                    )
-
-                elif "match" in value:
-                    return MatchFilter(field, value["match"])
-
-                elif "term" in value:
-                    return TermFilter(field, value["term"])
-
-                # ✅ Handle range filters properly
-                range_operators = {k: v for k, v in value.items() if k in {"gt", "lt", "gte", "lte"}}
-                if range_operators:
-                    return RangeFilter(field, **range_operators)
+                elif all(isinstance(v, dict) and "match" in v for v in value):
+                    should_clauses = [MatchFilter(field, v["match"]) for v in value]
+                    return BoolFilter(should=should_clauses, minimum_should_match=1)
 
                 else:
-                    raise ValueError(f"Unknown filter structure for field '{field}': {value}")
+                    raise TypeError(f"Invalid list format for field '{field}': {value}")
+
+            elif isinstance(value, dict):  
+                # ✅ Handle explicit MatchFilter
+                if "match" in value:
+                    return MatchFilter(field, value["match"])  
+
+                # ✅ Handle range filters
+                elif any(k in value for k in ["gt", "lt", "gte", "lte"]):
+                    return RangeFilter(field, **value)
+
+                # ✅ Handle wildcard filters
+                elif "wildcard" in value:
+                    return WildcardFilter(
+                        field,
+                        value["wildcard"],
+                        case_insensitive=value.get("case_insensitive", False),
+                        boost=value.get("boost")
+                    )
+
+                else:
+                    raise TypeError(f"Unsupported dictionary format for field '{field}': {value}")
 
             else:
-                # ✅ Fix: Ensure match vs term is correctly inferred
-                if isinstance(value, str) and " " in value:
-                    return MatchFilter(field, value)  # Full-text search → match query
-                else:
-                    return TermFilter(field, value)  # Exact keyword match → term query
+                # ✅ Default to TermFilter for exact match fields
+                return TermFilter(field, value)
+
+    elif isinstance(filter_data, list):  
+        return BoolFilter(must=[create_filter_object(f) for f in filter_data])
 
     else:
         raise TypeError("Filter data must be a list or a dictionary")
+
 
 def build_filter_query_class(filters_data):
     """Converts a list of filter objects into an Elasticsearch bool query."""

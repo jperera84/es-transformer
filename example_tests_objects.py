@@ -7,60 +7,54 @@ def generate_ids_filter_object():
 
 def generate_match_filter_object():
     return {
-        "filters": [
-            { "title": "quick brown fox" }, # match (full-text search)
-            { "title": { "match": "quick brown fox" } }, # match (explicit)
-        ]
+        "filters": {  # Dictionary → OR condition
+            "formula_metadata.name": [
+                "Threat Detection Rule",
+                "Suspicious Upload Rule"
+            ]  # OR condition (should)
+        }
     }
 
 def generate_range_filter_object():
     return {
         "filters": [
-            { "price": { "gt": 10, "lt": 100 } },  # range (numeric field)
-            { "price": { "gt": 1, "lt": 9 } }  # range (numeric field)
+            { "action_count": { "gt": 5, "lt": 20 } },  # ✅ Adjusted to a valid field
+            { "client_access_id": { "gte": 100000000, "lte": 500000000 } }  # ✅ Another valid range
         ]
     }
 
 def generate_term_filter_object():
     return {
         "filters": [
-            { "status": "active" },  # ✅ Inferred as `term`
-            { "age": 30 },  # ✅ Inferred as `term`
-            { "role": { "term": "Admin" } },  # ✅ Explicit term query
-            { "title": "quick brown fox" },  # ✅ Inferred as `match`
-            { "price": { "gt": 10, "lt": 100 } }  # ✅ Inferred as `range`
+            { "formula_matches_action_archiving_state.type": "archived" },  # ✅ Inferred as `term`
+            { "client_id": 987654321 },  # ✅ Inferred as `term`
+            { "event.provider": "security-monitor" }
         ]
     }
 
 def generate_terms_filter_object():
     return {
         "filters": [
-            { "title": "quick brown fox" },
-            { "tags": ["new", "featured"], "boost": 1.0 },
-            { "tags": ["electronics", "sale"] },
-            { "filename": { "wildcard": "*.log", "boost": 2.0 } }
+            { "formula_metadata.tags.value": ["security", "critical"] },  # ✅ Inferred as `terms`
         ]
     }
 
 def generate_wildcard_filter_object():
     return {
         "filters": [
-            { "username": { "wildcard": "user*" } },  # ✅ Inferred as `wildcard`
-            { "email": { "wildcard": "*@example.com", "case_insensitive": True } },  # ✅ Case-insensitive wildcard
-            { "filename": { "wildcard": "*.log", "boost": 2.0 } }  # ✅ Wildcard with boost
+            { "event.provider": { "wildcard": "security*" } }  # ✅ Wildcard for keyword field
         ]
     }
 
 def generate_bool_filter_object():
     return {
         "filters": [
-            [  # AND condition (must)
-                {"brand": "Samsung"},
-                {
-                    "color": [
-                        {"term": "black"},
-                        {"term": "white"},
-                        {"minimum_should_match": 1}
+            [  # ✅ AND condition (implicit must)
+                {"formula_metadata.name": "Threat Detection Rule"},  # ✅ Term filter for `name`
+                {  # ✅ OR condition (should)
+                    "formula_metadata.tags.value": [
+                        "security",
+                        "critical"
                     ]
                 }
             ]

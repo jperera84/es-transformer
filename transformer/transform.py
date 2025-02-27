@@ -6,10 +6,6 @@ class Transformer:
     
     def __init__(self, index):
         self.index = index
-        self.transformation = {
-            "source": index,
-            "steps": []
-        }
     
     def transform(self, data):
         """Transforms the data based on the provided transformation steps."""
@@ -19,25 +15,29 @@ class Transformer:
         """Adds a filter to the transformation steps and ensures a valid query."""
 
         filters_list = []
-        for filter_data in filters:
-            created_filter = filter.create_filter_object(filter_data)
+
+        # ✅ Handle both dictionary (OR) and list (AND)
+        if isinstance(filters, dict):  # OR condition (should)
+            created_filter = filter.create_filter_object(filters)
             if created_filter:
                 filters_list.append(created_filter)
 
-        if filters_list:
-            self.transformation["steps"].append({"filters": filters_list})
+        elif isinstance(filters, list):  # AND condition (must)
+            for filter_data in filters:
+                created_filter = filter.create_filter_object(filter_data)
+                if created_filter:
+                    filters_list.append(created_filter)
 
         sort_list = []
         for sort_data in sorts:
             sort_list.append(sort.create_sort_object(sort_data))
-        if sort_list:
-            self.transformation["steps"].append({"sort": sort_list})
 
         if aggs:
             self.transformation["steps"].append({"aggs": aggs})
 
         return self.build_elasticsearch_query(filters_list, sort_list, aggs, size)
-        
+
+
     def build_elasticsearch_query(self, filters_data, sort_data=None, aggs_data=None, size=20):
         """Builds an Elasticsearch query with optional sorting and ensures a valid query."""
 
