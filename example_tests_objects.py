@@ -1,3 +1,5 @@
+from transformer import TermsAggregation
+
 def generate_ids_filter_object():
     return {
         "filters": [
@@ -194,4 +196,46 @@ def generate_composite_agg_object():
                 }
             ]
         }
+    }
+
+def generate_nested_terms_agg_object():
+    return {
+        "filters": [
+            {"event.provider": "pfm"},
+            {"trust_initiated": True},
+            {"formula_traffic_role": "Server"},
+            {"formula_metadata.type": "whitelist"},
+            {"formula_matches_action_archiving_state.type": "full_meta_and_content"},
+            {"@timestamp": {"gte": "2025-01-01T00:00:00.000Z", "lte": "2025-01-02T00:00:00.000Z"}},
+            {"formula_matches_id": [1, 2, 3]}
+        ],
+        "aggs": {
+            "client_id": ["terms", 50],  # ✅ ["terms", size] → converted correctly
+            "formula_matches_id": {
+                "terms": 50,  # ✅ Convert into correct `terms` structure
+                "aggs": {
+                    "http.request.method": {  # ✅ Correct field name
+                        "terms": 10,
+                        "aggs": {
+                            "source_address": {
+                                "terms": 50,
+                                "aggs": {
+                                    "url.domain": {  # ✅ Correct field name
+                                        "terms": 500,
+                                        "missing": "__missing__",  
+                                        "aggs": {
+                                            "destination_address": {
+                                                "terms": 500,
+                                                "missing": "__missing__"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "size": 0
     }

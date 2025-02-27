@@ -4,29 +4,51 @@ class BaseAggregation:
         self.name = name
         self.nested_path = nested_path
         self.nested_filter = nested_filter
-        self.aggs = aggs or {}
+        self.aggs = aggs or {}  # ✅ Ensure sub-aggregations are stored properly
 
-    def _add_nested_clause(self, agg_clause):
+    def _add_nested_clause(self, agg_query):
+        """Wraps an aggregation in a nested clause if a nested path is provided."""
         if self.nested_path:
-            agg_clause["nested"] = {"path": self.nested_path}
+            nested_query = {
+                "nested": {"path": self.nested_path},
+                "aggs": {self.name: agg_query} if self.name else agg_query,
+            }
             if self.nested_filter:
-                agg_clause["nested"]["filter"] = self.nested_filter
-        return agg_clause
+                nested_query["nested"]["filter"] = self.nested_filter
+            return nested_query
+        return agg_query
 
-    def _add_include_missing(self, agg_clause):
-        if hasattr(self, 'include') and self.include is not None:
-            agg_clause["include"] = self.include
-        if hasattr(self, 'missing') and self.missing is not None:
-            agg_clause["missing"] = self.missing
-        return agg_clause
+    def to_elasticsearch(self):
+        """Convert aggregation to Elasticsearch format."""
+        raise NotImplementedError("Subclasses must implement this method.")
 
 class TermsAggregation(BaseAggregation):
-    def __init__(self, field, size=None, name=None):
-        if not isinstance(field, str) or (size is not None and not isinstance(size, int)):
-            raise TypeError("Invalid format for TermsAggregation. 'field' must be a string and 'size' must be an integer.")
-        
-        super().__init__(field, name=name)
+    def __init__(self, field, size=10, order=None, shard_size=None, missing=None, name=None, nested_path=None, nested_filter=None, aggs=None):
+        super().__init__(field, name, nested_path, nested_filter, aggs)
         self.size = size
+        self.order = order or {"_count": "desc"}
+        self.shard_size = shard_size
+        self.missing = missing  # ✅ Allow missing values
+
+    def to_elasticsearch(self):
+        """Convert TermsAggregation to Elasticsearch-compatible format."""
+        terms_agg = {
+            "terms": {
+                "field": self.field,
+                "size": self.size,
+                "order": self.order,
+            }
+        }
+        if self.shard_size:
+            terms_agg["terms"]["shard_size"] = self.shard_size
+        if self.missing:  # ✅ Add missing parameter if specified
+            terms_agg["terms"]["missing"] = self.missing
+
+        # ✅ Add sub-aggregations if present
+        if self.aggs:
+            terms_agg["aggs"] = {name: agg.to_elasticsearch() for name, agg in self.aggs.items()}
+
+        return {self.name: self._add_nested_clause(terms_agg)} if self.name else self._add_nested_clause(terms_agg)
 
     @classmethod
     def from_json(cls, data):
@@ -40,17 +62,6 @@ class TermsAggregation(BaseAggregation):
             return cls(field=data["terms"].get("field"), size=data["terms"].get("size"))
         else:
             raise ValueError(f"Invalid format for TermsAggregation: {data}")
-
-    def to_elasticsearch(self):
-        """Converts the TermsAggregation object to an Elasticsearch aggregation query."""
-        if not self.field:
-            raise ValueError("Field must be set for TermsAggregation.")
-
-        agg = {"terms": {"field": self.field}}
-        if self.size:
-            agg["terms"]["size"] = self.size
-        return {self.name: agg}
-
 
     def to_json(self):
         return {
@@ -489,40 +500,31 @@ class CardinalityAggregation(BaseAggregation):
         )
 
 class CompositeAggregation(BaseAggregation):
-    def __init__(self, name=None, sources=None, size=10, after=None, order=None, nested_path=None, nested_filter=None, aggs=None):
-        super().__init__(None, name, nested_path, nested_filter, aggs)  # No direct field in composite
-        self.sources = sources or []
+    def __init__(self, sources, size=10, after=None, order=None, name=None, nested_path=None, nested_filter=None, aggs=None):
+        super().__init__(None, name, nested_path, nested_filter, aggs)
+        self.sources = sources
         self.size = size
         self.after = after
-        self.order = order  # ✅ Support ordering
+        self.order = order
 
     def to_elasticsearch(self):
-        """Convert CompositeAggregation to an Elasticsearch-compatible format."""
         composite_agg = {
             "composite": {
-                "sources": self.sources,  # ✅ Handle source fields
+                "sources": self.sources,
                 "size": self.size
             }
         }
-
-        # ✅ Add optional `after` key for pagination
         if self.after:
             composite_agg["composite"]["after"] = self.after
-
-        # ✅ Add optional ordering dictionary
         if self.order:
-            composite_agg["composite"]["order"] = self.order  # Directly store as dictionary
+            composite_agg["composite"]["order"] = self.order
 
-        # ✅ Handle nested paths and filters if applicable
-        composite_agg = self._add_nested_clause(composite_agg)
-
-        # ✅ Add sub-aggregations if they exist
+        # ✅ Add sub-aggregations if present
         if self.aggs:
-            composite_agg["aggs"] = build_aggregation_query_class(self.aggs)
+            composite_agg["aggs"] = {name: agg.to_elasticsearch() for name, agg in self.aggs.items()}
 
-        # ✅ Ensure correct wrapping of aggregation under field name
-        return {self.name: composite_agg} if self.name else composite_agg
-
+        return {self.name: self._add_nested_clause(composite_agg)} if self.name else self._add_nested_clause(composite_agg)
+    
     def to_json(self):
         """Convert CompositeAggregation to JSON format."""
         json_data = {
@@ -603,8 +605,50 @@ def create_aggregation_object(agg_data):
     return agg_objects
 
 def build_aggregation_query_class(aggs_data):
-    agg_objects = create_aggregation_object(aggs_data)
+    """Converts simplified aggregation definitions into Elasticsearch-compatible format with correct nesting."""
+    if not aggs_data:
+        return {}
+
     aggs_query = {}
-    for name, agg_obj in agg_objects.items():
-        aggs_query.update(agg_obj.to_elasticsearch())
+    parent_agg = None
+
+    for name, agg_def in aggs_data.items():
+        if isinstance(agg_def, list):  # ✅ Handle ["terms", size] shorthand
+            agg_type, size = agg_def
+            if agg_type == "terms":
+                aggs_query[name] = {
+                    "terms": {
+                        "field": name,
+                        "size": int(size)
+                    }
+                }
+                if not parent_agg:
+                    parent_agg = name  # ✅ Set the first aggregation as the root
+        elif isinstance(agg_def, dict):  # ✅ Handle nested aggregations
+            size = int(agg_def.get("size", 10))
+            nested_aggs = agg_def.get("aggs", {})
+
+            if not parent_agg:
+                # ✅ First aggregation becomes the root
+                aggs_query[name] = {
+                    "terms": {
+                        "field": name,
+                        "size": size
+                    },
+                    "aggs": build_aggregation_query_class(nested_aggs) if nested_aggs else {}
+                }
+                parent_agg = name
+            else:
+                # ✅ Nest all subsequent aggregations under the first one
+                current_agg = {
+                    "terms": {
+                        "field": name,
+                        "size": size
+                    }
+                }
+                if nested_aggs:
+                    current_agg["aggs"] = build_aggregation_query_class(nested_aggs)
+
+                aggs_query[parent_agg].setdefault("aggs", {})[name] = current_agg
+
     return aggs_query

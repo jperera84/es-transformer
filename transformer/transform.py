@@ -33,6 +33,30 @@ class Transformer:
             sort_list.append(sort.create_sort_object(sort_data))
 
         return self.build_elasticsearch_query(filters_list, sort_list, aggs, size)
+    
+    def process_data(self, filters, sorts, aggs, size):
+        """Processes filters, sorts, and aggregations into a valid Elasticsearch query."""
+        
+        filters_list = []
+
+        # ✅ Handle both dictionary (OR) and list (AND)
+        if isinstance(filters, dict):  # OR condition (should)
+            created_filter = filter.create_filter_object(filters)
+            if created_filter:
+                filters_list.append(created_filter)
+
+        elif isinstance(filters, list):  # AND condition (must)
+            for filter_data in filters:
+                created_filter = filter.create_filter_object(filter_data)
+                if created_filter:
+                    filters_list.append(created_filter)
+        sort_list = [sort.create_sort_object(s) for s in sorts] if sorts else []
+        
+        aggs_query = aggregation.build_aggregation_query_class(aggs) if aggs else {}
+
+        query = self.build_elasticsearch_query(filters_list, sort_list, aggs_query, size)
+        return query
+
 
     def build_elasticsearch_query(self, filters_list, sort_list, aggs, size):
         query_body = {}
