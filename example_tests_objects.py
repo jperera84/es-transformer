@@ -239,3 +239,74 @@ def generate_nested_terms_agg_object():
         },
         "size": 0
     }
+
+def generate_nested_terms_agg_object_order():
+    return {
+        "filters": [
+            {"event.provider": "pfm"},
+            {"trust_initiated": True},
+            {"formula_traffic_role": "Server"},
+            {"formula_metadata.type": "whitelist"},
+            {"formula_matches_action_archiving_state.type": "full_meta_and_content"},
+            {"@timestamp": {"gte": "2025-01-01T00:00:00.000Z", "lte": "2025-01-02T00:00:00.000Z"}},
+            {"formula_matches_id": [1, 2, 3]}
+        ],
+        "aggs": {
+            "client_id": {
+                "terms": {
+                    "field": "client_id",
+                    "size": 50,
+                    "order": { "_key": "asc" }  # ✅ Order by key (client_id) ascending
+                },
+                "aggs": {
+                    "formula_matches_id": {
+                        "terms": {
+                            "field": "formula_matches_id",
+                            "size": 50,
+                            "order": { "_count": "desc" }  # ✅ Order by count descending
+                        },
+                        "aggs": {
+                            "http.request.method": {
+                                "terms": {
+                                    "field": "http.request.method",
+                                    "size": 10,
+                                    "order": { "_count": "desc" }  # ✅ Order by count descending
+                                },
+                                "aggs": {
+                                    "source_address": {
+                                        "terms": {
+                                            "field": "source_address",
+                                            "size": 50,
+                                            "order": { "_count": "desc" }
+                                        },
+                                        "aggs": {
+                                            "url.domain": {
+                                                "terms": {
+                                                    "field": "url.domain",
+                                                    "size": 500,
+                                                    "order": { "_count": "desc" },
+                                                    "missing": "__missing__"  # ✅ Handle missing values
+                                                },
+                                                "aggs": {
+                                                    "destination_address": {
+                                                        "terms": {
+                                                            "field": "destination_address",
+                                                            "size": 500,
+                                                            "order": { "_count": "desc" },
+                                                            "missing": "__missing__"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "size": 0
+    }
+

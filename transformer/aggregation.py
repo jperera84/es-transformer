@@ -23,60 +23,55 @@ class BaseAggregation:
         raise NotImplementedError("Subclasses must implement this method.")
 
 class TermsAggregation(BaseAggregation):
-    def __init__(self, field, size=10, order=None, shard_size=None, missing=None, name=None, nested_path=None, nested_filter=None, aggs=None):
+    def __init__(self, field, name=None, size=10, order=None, nested_path=None, nested_filter=None, aggs=None):
+        if not isinstance(field, str):  # ✅ Validate field type
+            raise TypeError(f"Field must be a string, got {type(field)}")
+
         super().__init__(field, name, nested_path, nested_filter, aggs)
-        self.size = size
-        self.order = order or {"_count": "desc"}
-        self.shard_size = shard_size
-        self.missing = missing  # ✅ Allow missing values
+        self.size = size if isinstance(size, int) and size > 0 else 10  # ✅ Validate size
+        self.order = order if isinstance(order, dict) else None  # ✅ Validate order format
 
     def to_elasticsearch(self):
-        """Convert TermsAggregation to Elasticsearch-compatible format."""
+        """Convert TermsAggregation to an Elasticsearch-compatible format."""
         terms_agg = {
             "terms": {
                 "field": self.field,
-                "size": self.size,
-                "order": self.order,
+                "size": self.size
             }
         }
-        if self.shard_size:
-            terms_agg["terms"]["shard_size"] = self.shard_size
-        if self.missing:  # ✅ Add missing parameter if specified
-            terms_agg["terms"]["missing"] = self.missing
 
-        # ✅ Add sub-aggregations if present
+        if self.order:
+            terms_agg["terms"]["order"] = self.order
+
+        terms_agg = self._add_nested_clause(terms_agg)
+
         if self.aggs:
-            terms_agg["aggs"] = {name: agg.to_elasticsearch() for name, agg in self.aggs.items()}
+            terms_agg["aggs"] = build_aggregation_query_class(self.aggs)
 
-        return {self.name: self._add_nested_clause(terms_agg)} if self.name else self._add_nested_clause(terms_agg)
-
-    @classmethod
-    def from_json(cls, data):
-        """Supports both traditional and simplified JSON models."""
-        if isinstance(data, list) and len(data) == 2:  # Supports ["terms", 20] format
-            agg_type, size = data
-            if agg_type != "terms":
-                raise ValueError(f"Invalid aggregation type '{agg_type}'. Expected 'terms'.")
-            return cls(field=None, size=size)  # Field will be inferred in processing
-        elif isinstance(data, dict) and "terms" in data:
-            return cls(field=data["terms"].get("field"), size=data["terms"].get("size"))
-        else:
-            raise ValueError(f"Invalid format for TermsAggregation: {data}")
+        return {self.name: terms_agg} if self.name else {self.field: terms_agg}  # ✅ Ensure correct nesting
 
     def to_json(self):
-        return {
+        json_data = {
             "type": "terms_aggregation",
             "field": self.field,
             "name": self.name,
             "size": self.size,
             "order": self.order,
-            "min_doc_count": self.min_doc_count,
-            "other_bucket": self.other_bucket,
-            "include": self.include,
-            "missing": self.missing,
             "nested_path": self.nested_path,
-            "nested_filter": self.nested_filter,
+            "nested_filter": self.nested_filter
         }
+        return {k: v for k, v in json_data.items() if v is not None}
+
+    @classmethod
+    def from_json(cls, data):
+        return cls(
+            field=data["field"],
+            name=data.get("name"),
+            size=data.get("size", 10),
+            order=data.get("order"),
+            nested_path=data.get("nested_path"),
+            nested_filter=data.get("nested_filter")
+        )
 
 class AvgAggregation(BaseAggregation):
     def __init__(self, field, name=None, nested_path=None, nested_filter=None, aggs=None):
@@ -605,7 +600,7 @@ def create_aggregation_object(agg_data):
     return agg_objects
 
 def build_aggregation_query_class(aggs_data):
-    """Converts simplified aggregation definitions into Elasticsearch-compatible format with correct nesting."""
+    """Converts simplified aggregation definitions into Elasticsearch-compatible format with correct nesting and order."""
     if not aggs_data:
         return {}
 
@@ -619,36 +614,35 @@ def build_aggregation_query_class(aggs_data):
                 aggs_query[name] = {
                     "terms": {
                         "field": name,
-                        "size": int(size)
+                        "size": int(size),
+                        "order": {"_count": "desc"}  # ✅ Default order unless overridden
                     }
                 }
                 if not parent_agg:
                     parent_agg = name  # ✅ Set the first aggregation as the root
+
         elif isinstance(agg_def, dict):  # ✅ Handle nested aggregations
             size = int(agg_def.get("size", 10))
+            order = agg_def.get("order", {"_count": "desc"})  # ✅ Extract order if available, default to "_count"
             nested_aggs = agg_def.get("aggs", {})
+
+            terms_agg = {
+                "terms": {
+                    "field": name,
+                    "size": size,
+                    "order": order  # ✅ Ensure order is applied
+                }
+            }
+
+            if nested_aggs:
+                terms_agg["aggs"] = build_aggregation_query_class(nested_aggs)
 
             if not parent_agg:
                 # ✅ First aggregation becomes the root
-                aggs_query[name] = {
-                    "terms": {
-                        "field": name,
-                        "size": size
-                    },
-                    "aggs": build_aggregation_query_class(nested_aggs) if nested_aggs else {}
-                }
+                aggs_query[name] = terms_agg
                 parent_agg = name
             else:
                 # ✅ Nest all subsequent aggregations under the first one
-                current_agg = {
-                    "terms": {
-                        "field": name,
-                        "size": size
-                    }
-                }
-                if nested_aggs:
-                    current_agg["aggs"] = build_aggregation_query_class(nested_aggs)
-
-                aggs_query[parent_agg].setdefault("aggs", {})[name] = current_agg
+                aggs_query[parent_agg].setdefault("aggs", {})[name] = terms_agg
 
     return aggs_query
